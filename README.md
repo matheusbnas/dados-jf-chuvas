@@ -1,99 +1,121 @@
-# Dados Rio Chuvas
+# Dados JF — Chuvas (Juiz de Fora)
 
-Mapa interativo de chuva em tempo real e histórico para o Rio de Janeiro, com zonas pluviométricas oficiais (33 estações), critérios de 15 min e 1 h (Termos Meteorológicos) e dados acumulados via GCP.
+Aplicação web (React + Vite + Leaflet) para visualizar **chuva em tempo real** na estação automática do INMET em Juiz de Fora–MG e **histórico pluviométrico** a partir de exportações CSV do **CEMADEN** (estações no município). Inclui mapa por **zonas de influência** (Voronoi), **bairros** (OpenStreetMap), **áreas de risco** (Defesa Civil) e linha do tempo no modo histórico.
 
-## 🚀 Deploy no Netlify
+## Funcionalidades
 
-### Opção 1: Deploy via Git (recomendado)
+| Área | Descrição |
+|------|-----------|
+| **Tempo real** | Dados da estação **A83692** (INMET) via proxy Netlify `/api/inmet/*` → API pública apitempo. Atualização periódica (ex.: 5 min). |
+| **Histórico 2026** | CSVs CEMADEN em `public/data/cemaden/` (`2026-01.csv` … `2026-03.csv`), linha do tempo, instantâneo ou acumulado no período. |
+| **Mapa base** | Tipos: Rua, **Satélite** (padrão), Escuro — tiles OpenStreetMap / Esri. |
+| **Influência pluviométrica** | Com **2+ estações**, células **Voronoi** recortadas ao perímetro municipal (`data/zonas-pluviometricas.geojson`); com **1 estação**, só contorno municipal (sem mancha sólida tapando o mapa). |
+| **Bairros** | Polígonos OSM (`data/bairros-jf.geojson`), cores por bairro, filtro “foco” no mapa; nomes corrigidos de mojibake em runtime. |
+| **Áreas de risco** | Camada opcional: `public/data/areas-risco-jf.geojson` (origem KML Google My Maps / SSPDC); classificação R1–R4; carregamento sob demanda (~6 MB). |
+| **Modo demonstração** | Dados mock para testar UI sem API. |
 
-1. Faça push do código para o GitHub/GitLab/Bitbucket
-2. Acesse [netlify.com](https://netlify.com) e faça login
-3. **New site from Git** → conecte o repositório
-4. **Variáveis de ambiente** (em Site settings → Environment variables):
-   - **Modo histórico (GCP):** `GOOGLE_APPLICATION_CREDENTIALS_JSON` (conteúdo do `credentials.json` em uma linha). Ver [GCP_SETUP.md](./GCP_SETUP.md).
-   - **Google Maps (opcional):** `VITE_GOOGLE_MAPS_API_KEY` só se for usar o mapa Google; o mapa padrão é **Leaflet** (OpenStreetMap).
-5. **Deploy site**
+Ocorrências (API/planilha) podem estar desativadas no código conforme configuração do projeto.
 
-### Opção 2: Deploy manual
+## Requisitos
+
+- **Node.js** 18+ (recomendado; o Netlify usa 18 no `netlify.toml`)
+- **npm** 9+
+
+## Instalação e desenvolvimento
+
+```bash
+npm install
+npm run dev
+```
+
+Abre o Vite em `http://localhost:5173` (porta padrão).
+
+### Build local
 
 ```bash
 npm run build
+npm run preview   # testa a pasta dist
 ```
 
-Arraste a pasta `dist` para o Netlify e configure as variáveis de ambiente no painel do site.
+## Dados estáticos (importante)
 
-## 📁 Estrutura do projeto
+| Caminho | Conteúdo |
+|---------|----------|
+| `public/data/cemaden/2026-01.csv` … `2026-03.csv` | Exportações CEMADEN (separador `;`, colunas incl. `datahora`, `valorMedida`). Necessários para o modo **Histórico**. |
+| `data/bairros-jf.geojson` | Bairros de JF (OSM); empacotado pelo Vite. Sem este ficheiro, usa-se fallback IBGE (só contorno municipal). |
+| `data/zonas-pluviometricas.geojson` | Perímetro de referência municipal / zona pluviométrica (base para recorte Voronoi). |
+| `public/data/areas-risco-jf.geojson` | Polígonos de risco (gerado a partir do KML; ver script abaixo). |
 
-```
-src/
-├── components/
-│   ├── LeafletMap.tsx    # Mapa principal (Leaflet)
-│   ├── ZoneRainLayer.tsx # Zonas pluviométricas coloridas por nível de chuva
-│   ├── MapControls.tsx   # Filtros (tipo de mapa, 15min/1h/ambos, linhas de influência, histórico)
-│   ├── InfluenceLegend.tsx # Legenda (15min, 1h, acumulado)
-│   ├── RainStationCard.tsx
-│   └── ...
-├── hooks/                # useRainData, useCitiesData
-├── services/             # Alerta Rio, GCP histórico, citiesApi
-├── types/                # rain, alertaRio, etc.
-└── utils/
-    ├── rainLevel.ts      # Paleta e critérios (15min, 1h, acumulado)
-    ├── influenceTheme.ts # Cores das zonas/legenda
-    └── ...
-data/
-├── zonas-pluviometricas.geojson  # 33 zonas oficiais
-└── ...
-netlify/functions/        # historical-rain (BigQuery)
-```
+Coloque os CSVs CEMADEN em `public/data/cemaden/` com os nomes esperados pelo serviço (`cemadenLocalHistoricalApi.ts`).
 
-## 🛠️ Scripts
+## Variáveis de ambiente
+
+Copie `.env.example` para `.env` e ajuste.
+
+| Variável | Uso |
+|----------|-----|
+| `VITE_OCORRENCIAS_*` | Se o módulo de ocorrências estiver ativo: API ou planilha em `public/planilhas/`. |
+| `VITE_GEOCODE_OCORRENCIAS` | `false` para desativar geocoding de ocorrências. |
+| `VITE_GOOGLE_MAPS_API_KEY` | Opcional; o mapa principal é **Leaflet**. |
+
+Histórico **local (CEMADEN)** não exige credenciais GCP no browser.
+
+Para **histórico via BigQuery** (função Netlify `historical-rain`), ver [docs/GCP_SETUP.md](./docs/GCP_SETUP.md) e variável `GOOGLE_APPLICATION_CREDENTIALS_JSON` no Netlify.
+
+## Scripts npm
 
 | Comando | Descrição |
 |---------|-----------|
-| `npm run dev` | Servidor de desenvolvimento |
-| `npm run build` | Build para produção |
-| `npm run preview` | Preview do build |
-| `npm run lint` | Verificar código |
-| `npm run test:gcp` | Testar query GCP (BigQuery) |
+| `npm run dev` | Servidor de desenvolvimento Vite |
+| `npm run build` | Build de produção → `dist/` |
+| `npm run preview` | Servir `dist` localmente |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | TypeScript (`tsconfig.app.json`) |
+| `npm run test:gcp` | Teste de query GCP/BigQuery (se configurado) |
+| `npm run geojson:risco` | Converte `data/areas-risco-jf.kml` → `public/data/areas-risco-jf.geojson` (requer KML exportado do My Maps) |
 
-## 🌧️ Funcionalidades
+## Deploy (Netlify)
 
-- **Mapa Leaflet** (Rua, Satélite, Escuro) com foco no Rio de Janeiro
-- **Zonas pluviométricas** (GeoJSON oficial): cada zona colorida pelo nível de chuva da estação
-- **Bolinhas** nas estações com a mesma paleta de cores
-- **Dados no mapa:** 15 min (m15), 1 h (h01) ou **Ambos** (zonas = 15 min, bolinhas = 1 h)
-- **Linhas de influência:** contorno branco opcional entre as zonas
-- **Sem chuva:** zona sem preenchimento (mapa visível); demais níveis com cor sólida
-- **Modo histórico (GCP):** instantâneo (uma data + horário) ou acumulado no período (De/Até)
-- **Fonte em tempo real:** Alerta Rio (API); fallback e histórico: BigQuery (GCP)
+1. **Build:** `npm run build` — saída em `dist/`.
+2. **Comando / pasta:** conforme [netlify.toml](./netlify.toml) (`publish = dist`, `command = npm run build`).
+3. **Functions:** `netlify/functions/` (ex.: `historical-rain` para BigQuery).
+4. **Redirects:** proxy INMET (`/api/inmet/*`), API histórica (`/api/historical-rain` → função), SPA fallback.
 
-## 📊 Paleta de cores (níveis de chuva)
+Variáveis sensíveis apenas no painel do Netlify (não commitar `.env`).
 
-| Nível       | Cor       | Uso |
-|------------|-----------|-----|
-| Sem chuva  | `#CCD2D8` | Cinza claro; zona sem preenchimento |
-| Baixo      | `#7EC9E8` | Chuva fraca |
-| Moderado   | `#42B9EB` | Chuva moderada |
-| Alto       | `#2C85B2` | Chuva forte |
-| Muito alto | `#13335A` | Chuva muito forte |
+## Paleta e critérios de chuva
 
-Mesma paleta para 15 min, 1 h e acumulado (zonas, bolinhas, tabela e legendas).
+Mesma ideia para zonas, bolinhas e tabela: níveis por **15 min**, **1 h** ou **acumulado** (histórico), com paleta em `src/utils/rainLevel.ts` e `influenceTheme.ts`.
 
-## 📐 Critérios oficiais
+- **15 min (mm/15 min):** sem chuva 0 \| fraca &lt;1,25 \| moderada 1,25–6,25 \| forte 6,25–12,5 \| muito forte &gt;12,5  
+- **1 h (mm/h):** sem chuva 0 \| fraca &lt;5 \| moderada 5–25 \| forte 25,1–50 \| muito forte &gt;50  
 
-- **15 min (mm/15min):** Sem chuva 0 | Fraca &lt;1,25 | Moderada 1,25–6,25 | Forte 6,25–12,5 | Muito forte &gt;12,5
-- **1 h (mm/h):** Sem chuva 0 | Fraca &lt;5 | Moderada 5–25 | Forte 25,1–50 | Muito forte &gt;50
-- **Acumulado (mm no período):** critério Estágio 3 (ex.: fraca &lt;25,4; moderada 25,4–47; etc.)
+## Estrutura do repositório (resumo)
 
-## 🔧 Tecnologias
+```
+src/
+  components/     # LeafletMap, ZoneRainLayer, PluviometerVoronoiLayer, RiskAreasLayer, MapControls…
+  hooks/          # useRainData, useCitiesData, useRiskAreasData
+  services/       # rainApi (INMET), cemadenLocalHistoricalApi, citiesApi, gcpHistoricalRainApi…
+  utils/           # rainLevel, pluviometerVoronoi, fixBairroNameMojibake, riskAreaStyle…
+data/             # GeoJSON de zonas e bairros (Vite)
+public/data/      # CSV CEMADEN, areas-risco-jf.geojson (servidos em /data/...)
+scripts/          # kml-to-geojson.mjs, test-gcp-query.js
+netlify/functions/
+docs/             # GCP_SETUP.md
+```
 
-- **React** + **TypeScript** + **Vite**
-- **Leaflet** + **react-leaflet** (mapa principal)
-- **Tailwind CSS**
-- **Alerta Rio** (API tempo real)
-- **Netlify** (host + Functions para histórico GCP/BigQuery)
+## Documentação adicional
 
-## 📄 Documentação adicional
+- [docs/GCP_SETUP.md](./docs/GCP_SETUP.md) — BigQuery / credenciais para a função de histórico GCP (opcional face ao CSV local).
+- [docs/GOOGLE_MAPS_SETUP.md](./docs/GOOGLE_MAPS_SETUP.md) — Google Maps (opcional).
 
-- [GCP_SETUP.md](./GCP_SETUP.md) — Credenciais e variáveis para dados históricos (BigQuery)
-- [GOOGLE_MAPS_SETUP.md](./GOOGLE_MAPS_SETUP.md) — Configuração do Google Maps (opcional; o app usa Leaflet por padrão)
+## Licenças e fontes
+
+- **OpenStreetMap** — dados de bairros (ODbL); atribuição nos tiles do Leaflet.
+- **CEMADEN / exportações** — uso conforme termos da fonte.
+- **Áreas de risco** — mapeamento institucional (SSPDC/PJF); camada derivada de KML/My Maps para visualização cruzada com chuva.
+
+---
+
+*PoC de dados — Juiz de Fora, MG.*
