@@ -1,0 +1,59 @@
+[build]
+  publish = "dist"
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+[functions]
+  directory = "netlify/functions"
+
+# Headers para resolver problemas de CORS
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Headers específicos para API
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"
+
+# Evita cache no proxy INMET (dados em tempo quase real)
+[[headers]]
+  for = "/api/inmet/*"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0"
+    Pragma = "no-cache"
+    Expires = "0"
+
+# Proxy API pública INMET (apitempo) — mesma origem no deploy
+[[redirects]]
+  from = "/api/inmet/*"
+  to = "https://apitempo.inmet.gov.br/:splat"
+  status = 200
+  force = true
+
+# Dados históricos de chuvas (BigQuery via Netlify Function)
+[[redirects]]
+  from = "/api/historical-rain"
+  to = "/.netlify/functions/historical-rain"
+  status = 200
+  force = true
+
+# Fallback para SPA
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[dev]
+  command = "npm run dev"
+  port = 5173
+  publish = "dist"

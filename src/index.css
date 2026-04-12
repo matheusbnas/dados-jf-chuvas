@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Rolagem suave em painéis (mobile) */
+@layer utilities {
+  .scroll-touch {
+    -webkit-overflow-scrolling: touch;
+  }
+}

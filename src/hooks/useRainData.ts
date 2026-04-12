@@ -1,0 +1,228 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { RainStation } from '../types/rain';
+import { fetchRainData } from '../services/rainApi';
+import { fetchHistoricalRainStationsTimeline } from '../services/gcpHistoricalRainApi';
+import { MOCK_RAIN_STATIONS } from '../data/mockRainStations';
+
+export interface UseRainDataOptions {
+  /** Usar dados de exemplo (mock) para validar mapa de influência antes do GCP */
+  useMock?: boolean;
+  mode?: RainDataMode;
+  /** Data única (usada como De e Até quando não há intervalo) */
+  historicalDate?: string;
+  /** Data início do intervalo (ex.: 09/02/2026). Se não informado, usa historicalDate */
+  historicalDateFrom?: string;
+  /** Data fim do intervalo (ex.: 10/02/2026). Se não informado, usa historicalDate ou historicalDateFrom */
+  historicalDateTo?: string;
+  /** Filtro horário início (HH:mm) – combinado com a data na query ao GCP */
+  historicalTimeFrom?: string;
+  /** Filtro horário fim (HH:mm) – combinado com a data na query ao GCP */
+  historicalTimeTo?: string;
+  historicalTimestamp?: string | null;
+  refreshInterval?: number;
+}
+
+export type RainDataSource = 'api' | 'gcp' | 'mock';
+export type RainDataMode = 'auto' | 'historical';
+
+export const useRainData = (
+  refreshIntervalOrOptions: number | UseRainDataOptions = 300000
+) => {
+  const options =
+    typeof refreshIntervalOrOptions === 'object'
+      ? refreshIntervalOrOptions
+      : { refreshInterval: refreshIntervalOrOptions };
+  const {
+    useMock = false,
+    mode = 'auto',
+    historicalDate,
+    historicalDateFrom,
+    historicalDateTo,
+    historicalTimeFrom,
+    historicalTimeTo,
+    historicalTimestamp = null,
+    refreshInterval = 300000,
+  } = options;
+
+  const dateFrom = historicalDateFrom ?? historicalDate ?? new Date().toISOString().slice(0, 10);
+  const dateTo = historicalDateTo ?? historicalDate ?? dateFrom;
+
+  const [stations, setStations] = useState<RainStation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [lastFetchDurationMs, setLastFetchDurationMs] = useState<number>(0);
+  const [lastRequestAt, setLastRequestAt] = useState<Date | null>(null);
+  const [apiDataUnchangedSince, setApiDataUnchangedSince] = useState<Date | null>(null);
+  const [apiAvailable, setApiAvailable] = useState<boolean>(true);
+  const [historicalAvailable, setHistoricalAvailable] = useState<boolean>(false);
+  const [dataSource, setDataSource] = useState<RainDataSource>('api');
+  const [historicalTimeline, setHistoricalTimeline] = useState<string[]>([]);
+  const [activeHistoricalTimestamp, setActiveHistoricalTimestamp] = useState<string | null>(null);
+  const [stationsByTimestamp, setStationsByTimestamp] = useState<Record<string, RainStation[]>>({});
+  const [totalStations, setTotalStations] = useState<number>(0);
+  const inFlightRef = useRef(false);
+  const latestApiReadAtRef = useRef<number | null>(null);
+  const hasLoadedRef = useRef(false);
+  const loadDataRef = useRef<() => Promise<void>>(() => Promise.resolve());
+
+  const getLatestReadAt = (data: RainStation[]): Date | null => {
+    if (!data.length) return null;
+    const maxTs = Math.max(...data.map((s) => new Date(s.read_at).getTime()));
+    return Number.isFinite(maxTs) ? new Date(maxTs) : null;
+  };
+
+  const loadData = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    const startedAt = Date.now();
+    setLastRequestAt(new Date(startedAt));
+    try {
+      if (!hasLoadedRef.current) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
+      setError(null);
+
+      if (useMock) {
+        setStations(MOCK_RAIN_STATIONS);
+        setTotalStations(MOCK_RAIN_STATIONS.length);
+        setLastUpdate(getLatestReadAt(MOCK_RAIN_STATIONS) ?? new Date());
+        setApiAvailable(false);
+        setHistoricalAvailable(false);
+        setDataSource('mock');
+        setHistoricalTimeline([]);
+        setActiveHistoricalTimestamp(null);
+        setStationsByTimestamp({});
+        hasLoadedRef.current = true;
+        return;
+      }
+
+      if (mode === 'historical') {
+        const timelineData = await fetchHistoricalRainStationsTimeline(
+          {
+            dateFrom,
+            dateTo,
+            timeFrom: historicalTimeFrom,
+            timeTo: historicalTimeTo,
+            limit: 10000,
+          },
+          undefined
+        );
+
+        if (!timelineData.stations.length) {
+          throw new Error(
+            dateFrom === dateTo
+              ? `Sem dados históricos para ${dateFrom}`
+              : `Sem dados históricos para o período ${dateFrom} a ${dateTo}`
+          );
+        }
+
+        setStations(timelineData.stations);
+        setTotalStations(timelineData.stations.length);
+        setLastUpdate(getLatestReadAt(timelineData.stations) ?? new Date());
+        setApiAvailable(false);
+        setHistoricalAvailable(true);
+        setDataSource('gcp');
+        setHistoricalTimeline(timelineData.timeline);
+        setActiveHistoricalTimestamp(timelineData.selectedTimestamp);
+        setStationsByTimestamp(timelineData.stationsByTimestamp ?? {});
+        hasLoadedRef.current = true;
+        return;
+      }
+
+      const data = await fetchRainData();
+
+      if (data.length === 0) {
+        setHistoricalAvailable(false);
+        throw new Error('Nenhuma estação encontrada. Verifique a API INMET ou use o modo histórico (GCP).');
+      }
+
+      setStations(data);
+      setTotalStations(data.length);
+      const latestReadAt = getLatestReadAt(data) ?? new Date();
+      setLastUpdate(latestReadAt);
+      const latestReadAtMs = latestReadAt.getTime();
+      if (latestApiReadAtRef.current == null) {
+        latestApiReadAtRef.current = latestReadAtMs;
+        setApiDataUnchangedSince(null);
+      } else if (latestReadAtMs <= latestApiReadAtRef.current) {
+        // API respondeu, mas sem dado novo desde a última checagem.
+        setApiDataUnchangedSince((prev) => prev ?? new Date());
+      } else {
+        latestApiReadAtRef.current = latestReadAtMs;
+        setApiDataUnchangedSince(null);
+      }
+      setApiAvailable(true);
+      setDataSource('api');
+      setHistoricalTimeline([]);
+      setActiveHistoricalTimestamp(null);
+      setStationsByTimestamp({});
+      hasLoadedRef.current = true;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar dados';
+      setError(errorMessage);
+      setApiAvailable(false);
+      if (!hasLoadedRef.current) setStations([]);
+    } finally {
+      setLastFetchDurationMs(Date.now() - startedAt);
+      setLoading(false);
+      setRefreshing(false);
+      inFlightRef.current = false;
+    }
+  }, [useMock, mode, dateFrom, dateTo, historicalTimeFrom, historicalTimeTo]);
+
+  loadDataRef.current = loadData;
+
+  const refresh = useCallback(() => {
+    loadDataRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (useMock) {
+      loadDataRef.current();
+      return;
+    }
+    if (mode === 'historical') {
+      // Histórico: não carrega automaticamente. Evita lentidão e garante melhor qualidade.
+      // O usuário define o intervalo e clica "Aplicar" no painel para buscar.
+      setLoading(false);
+      setStations([]);
+      setHistoricalTimeline([]);
+      setActiveHistoricalTimestamp(null);
+      setStationsByTimestamp({});
+      return;
+    }
+    loadDataRef.current();
+    const interval = setInterval(() => loadDataRef.current(), refreshInterval);
+    return () => clearInterval(interval);
+  }, [refreshInterval, useMock, mode]);
+
+  const effectiveHistoricalTs = historicalTimestamp ?? activeHistoricalTimestamp;
+  useEffect(() => {
+    if (mode !== 'historical' || !effectiveHistoricalTs || !Object.keys(stationsByTimestamp).length) return;
+    const list = stationsByTimestamp[effectiveHistoricalTs];
+    if (list) setStations(list);
+  }, [mode, effectiveHistoricalTs, stationsByTimestamp]);
+
+  return {
+    stations,
+    loading,
+    refreshing,
+    error,
+    lastUpdate,
+    apiAvailable,
+    historicalAvailable,
+    dataSource,
+    historicalTimeline,
+    activeHistoricalTimestamp,
+    stationsByTimestamp,
+    totalStations,
+    lastFetchDurationMs,
+    lastRequestAt,
+    apiDataUnchangedSince,
+    refresh
+  };
+};

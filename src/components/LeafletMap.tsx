@@ -1,0 +1,750 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Polygon, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import { ChevronLeft, ChevronRight, SlidersHorizontal, Table2, X, Maximize2, Minimize2 } from 'lucide-react';
+import { RainStation } from '../types/rain';
+import type { Occurrence } from '../types/occurrence';
+import { useBairrosData, useZonasPluvData } from '../hooks/useCitiesData';
+import { LoadingSpinner } from './LoadingSpinner';
+import { getRainLevel } from '../utils/rainLevel';
+import { ZoneRainLayer } from './ZoneRainLayer';
+import { RainDataTable, type SortField, type SortDirection } from './RainDataTable';
+import {
+  MapLayers,
+  InfluenceLinesToggle,
+  MapDataWindowToggle,
+  HistoricalViewModeToggle,
+  HistoricalTimelineControl,
+  FocusCityButton,
+  FitCityOnLoad,
+  OccurrencesToggle,
+  OccurrenceSourceSelector,
+  OccurrencePlanilhaUpload,
+  OccurrenceFilters,
+} from './MapControls';
+import type { OccurrenceDataSource } from './MapControls';
+import { OccurrenceTable } from './OccurrenceTable';
+import { MAP_TYPES, type MapDataWindow, type HistoricalViewMode, type MapTypeId } from './mapControlTypes';
+import { getAccumulatedRainLevel, RAIN_LEVEL_PALETTE } from '../utils/rainLevel';
+import { getCriticidadeLabel } from '../utils/criticidade';
+import { TimelinePlayerControl } from './MapControls/TimelinePlayerControl';
+import 'leaflet/dist/leaflet.css';
+
+// Fix para ícones do Leaflet
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+interface LeafletMapProps {
+  stations: RainStation[];
+  mapType: MapTypeId;
+  onMapTypeChange: (mapType: MapTypeId) => void;
+  historicalMode: boolean;
+  historicalDate: string;
+  onHistoricalDateChange: (date: string) => void;
+  /** Data fim do intervalo (ex.: 10/02/2026). Quando igual a historicalDate, é um único dia */
+  historicalDateTo?: string;
+  onHistoricalDateToChange?: (date: string) => void;
+  /** Filtro horário (dia_original): início e fim no formato HH:mm */
+  historicalTimeFrom?: string;
+  historicalTimeTo?: string;
+  onHistoricalTimeFromChange?: (time: string) => void;
+  onHistoricalTimeToChange?: (time: string) => void;
+  historicalTimeline: string[];
+  selectedHistoricalTimestamp: string | null;
+  onHistoricalTimestampChange: (timestamp: string) => void;
+  /** Quais dados exibir no mapa: 15min, 1h ou ambos */
+  mapDataWindow?: MapDataWindow;
+  onMapDataWindowChange?: (v: MapDataWindow) => void;
+  /** No histórico: instantâneo (snapshot) ou acumulado no período */
+  historicalViewMode?: HistoricalViewMode;
+  onHistoricalViewModeChange?: (v: HistoricalViewMode) => void;
+  /** Chama ao clicar em "Aplicar" no painel histórico (busca com o intervalo atual) */
+  onApplyHistoricalFilter?: () => void;
+  /** Exibe indicador de carregamento no painel histórico */
+  historicalRefreshing?: boolean;
+  /** Carregando ocorrências da API (Mostrar ocorrências + Aplicar) */
+  occurrenceLoading?: boolean;
+  /** Erro ao carregar ocorrências */
+  occurrenceError?: string | null;
+  /** No modo instantâneo: horário desejado (HH:mm). Aplicado só ao clicar em Aplicar. */
+  desiredAnalysisTime?: string;
+  onDesiredAnalysisTimeChange?: (time: string) => void;
+  /** Ocorrências filtradas para o período atual, a serem exibidas como marcadores vermelhos. */
+  occurrences?: Occurrence[];
+  /** Se o usuário quer ver ocorrências (toggle state, pendente até Aplicar) */
+  showOccurrences?: boolean;
+  onShowOccurrencesChange?: (show: boolean) => void;
+  /** Fonte dos dados: API ou planilha (arquivo estático) */
+  occurrenceDataSource?: OccurrenceDataSource;
+  onOccurrenceDataSourceChange?: (source: OccurrenceDataSource) => void;
+  /** Erro ao carregar planilha (ex.: arquivo muito grande) */
+  planilhaLoadError?: string | null;
+  /** Upload manual de .xlsx (modo histórico + fonte planilha) */
+  onPlanilhaFileChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  uploadedPlanilhaFileName?: string | null;
+  onClearUploadedPlanilha?: () => void;
+  planilhaUploadError?: string | null;
+  planilhaGeocoding?: boolean;
+  planilhaGeocodeProgress?: string | null;
+  /** Se as ocorrências devem realmente ser renderizadas (aplicado após clicar Aplicar) */
+  appliedShowOccurrences?: boolean;
+  /** Filtro de texto para ocorrências (pendente até clicar em Aplicar) */
+  occurrenceTextFilter?: string;
+  onOccurrenceTextFilterChange?: (text: string) => void;
+  /** Filtro de categorias para ocorrências (pendente até clicar em Aplicar) */
+  occurrenceCategoryFilter?: string[];
+  onOccurrenceCategoryFilterChange?: (categories: string[]) => void;
+  /** Categorias disponíveis para filtro de ocorrências */
+  availableOccurrenceCategories?: string[];
+  // --- Timeline Player ---
+  isPlaying?: boolean;
+  playingIndex?: number;
+  onPlayingIndexChange?: (i: number) => void;
+  onPlayPause?: (playing: boolean) => void;
+  playbackMode?: 'rain' | 'occurrences' | 'both';
+  onPlaybackModeChange?: (mode: 'rain' | 'occurrences' | 'both') => void;
+  playbackSpeed?: number;
+  onPlaybackSpeedChange?: (speed: number) => void;
+  sortField?: SortField;
+  sortDirection?: SortDirection;
+  onSortChange?: (field: SortField, direction: SortDirection) => void;
+}
+
+// Componente para criar polígonos dos bairros
+const BairroPolygons: React.FC<{ bairrosData: any; showHexagons: boolean }> = ({ bairrosData, showHexagons }) => {
+  return (
+    <>
+      {bairrosData.features.map((feature: any, index: number) => {
+        const bairroName = feature.properties.nome;
+        // Removido: cores dos bairros - apenas bolinhas coloridas
+
+        // Converter coordenadas para o formato do Leaflet
+        let coordinates: number[][][] = [];
+
+        if (feature.geometry.type === 'MultiPolygon') {
+          coordinates = feature.geometry.coordinates[0];
+        } else if (feature.geometry.type === 'Polygon') {
+          coordinates = [feature.geometry.coordinates[0]];
+        }
+
+        // Converter para formato [lat, lng] do Leaflet
+        const leafletCoordinates = coordinates.map(polygon =>
+          polygon.map(coord => [coord[1], coord[0]] as [number, number]) // Inverter lat/lng
+        );
+
+        return (
+          <Polygon
+            key={`bairro-${index}`}
+            positions={leafletCoordinates}
+            pathOptions={{
+              color: showHexagons ? '#475569' : '#9CA3AF',
+              weight: showHexagons ? 1.2 : 1,
+              opacity: showHexagons ? 0.85 : 0.5,
+              fillColor: '#F3F4F6',
+              fillOpacity: showHexagons ? 0 : 0.12,
+            }}
+          >
+            <Popup>
+              <div style={{ padding: '8px', fontFamily: 'Arial, sans-serif' }}>
+                <h3 style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#333' }}>
+                  {bairroName}
+                </h3>
+                <p style={{ margin: '0', fontSize: '12px', color: '#666' }}>
+                  {feature.properties.regiao_adm || 'MG'}
+                </p>
+              </div>
+            </Popup>
+          </Polygon>
+        );
+      })}
+    </>
+  );
+};
+
+// Cor da bolinha por nível de influência 0-4 (mesma paleta: 15 min, 1h e acumulado)
+const INFLUENCE_COLORS = RAIN_LEVEL_PALETTE;
+
+// Componente para criar marcadores das estações
+const StationMarkers: React.FC<{
+  stations: RainStation[];
+  mapDataWindow?: MapDataWindow;
+  showAccumulated?: boolean;
+}> = ({ stations, mapDataWindow = 'both', showAccumulated = false }) => {
+  return (
+    <>
+      {stations.map((station) => {
+        const oneHourRain = Math.max(0, station.data.h01 ?? 0);
+        const m15 = Math.max(0, station.data.m15 ?? 0);
+        const acc = station.accumulated;
+        const useAccumulated = showAccumulated && acc;
+        const accumulatedMm = useAccumulated ? acc.mm_accumulated : 0;
+
+        let rainLevel: { color: string; name: string };
+        if (useAccumulated) {
+          rainLevel = getAccumulatedRainLevel(accumulatedMm);
+        } else if (mapDataWindow === '15min') {
+          const level = m15 <= 0 ? 0 : m15 < 1.25 ? 1 : m15 <= 6.25 ? 2 : m15 <= 12.5 ? 3 : 4;
+          rainLevel = { color: INFLUENCE_COLORS[level as 0 | 1 | 2 | 3 | 4], name: ['Sem chuva', 'Fraca', 'Moderada', 'Forte', 'Muito forte'][level] };
+        } else {
+          rainLevel = getRainLevel(oneHourRain);
+        }
+
+        // Criar ícone personalizado para a estação
+        const stationIcon = L.divIcon({
+          className: 'custom-station-icon',
+          html: `
+            <div style="
+              width: 16px;
+              height: 16px;
+              background-color: ${rainLevel.color};
+              border: 2px solid white;
+              border-radius: 50%;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            "></div>
+          `,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        });
+
+        return (
+          <Marker
+            key={station.id}
+            position={[station.location[0], station.location[1]]}
+            icon={stationIcon}
+          >
+            <Popup>
+              <div style={{ padding: '12px', fontFamily: 'Arial, sans-serif', minWidth: '200px' }}>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#333' }}>
+                  {station.name}
+                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    backgroundColor: rainLevel.color,
+                    borderRadius: '50%',
+                    marginRight: '8px'
+                  }}></div>
+                  <span style={{ fontSize: '14px', color: '#666' }}>{rainLevel.name}</span>
+                </div>
+                {useAccumulated && (
+                  <p style={{ margin: '4px 0', fontSize: '14px', color: '#333', fontWeight: 600 }}>
+                    Acumulado no período: {acc!.mm_accumulated.toFixed(1)} mm
+                  </p>
+                )}
+                <p style={{ margin: '4px 0', fontSize: '14px', color: '#333' }}>
+                  <strong>Chuva 15min:</strong> {m15.toFixed(1)} mm
+                </p>
+                <p style={{ margin: '4px 0', fontSize: '14px', color: '#333' }}>
+                  <strong>Chuva 1h:</strong> {oneHourRain.toFixed(1)} mm/h
+                </p>
+                <p style={{ margin: '4px 0', fontSize: '14px', color: '#333' }}>
+                  <strong>Última atualização:</strong> {new Date(station.read_at).toLocaleTimeString('pt-BR')}
+                </p>
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
+    </>
+  );
+};
+
+const OccurrenceMarkers: React.FC<{ occurrences?: Occurrence[] }> = ({ occurrences }) => {
+  if (!occurrences || !occurrences.length) return null;
+
+  const occurrenceIcon = L.divIcon({
+    className: 'custom-occurrence-icon',
+    html: `
+      <div style="
+        width: 14px;
+        height: 14px;
+        background-color: #ef4444;
+        border: 2px solid white;
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+      "></div>
+    `,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  });
+
+  return (
+    <>
+      {occurrences.map((occ, index) => {
+        if (occ.latitude == null || occ.longitude == null) return null;
+        const dt =
+          occ.data_hora_abertura ??
+          (occ.data_abertura && occ.hora_abertura
+            ? `${occ.data_abertura} ${occ.hora_abertura}`
+            : occ.data_abertura ?? null);
+
+        return (
+          <Marker
+            key={`${occ.id_ocorrencia}-${index}`}
+            position={[occ.latitude, occ.longitude]}
+            icon={occurrenceIcon}
+          >
+            <Popup>
+              <div style={{ padding: '10px', fontFamily: 'Arial, sans-serif', minWidth: '220px' }}>
+                <h3 style={{ margin: '0 0 6px 0', fontSize: '15px', color: '#b91c1c', fontWeight: 700 }}>
+                  Ocorrência {occ.id_ocorrencia}
+                </h3>
+                {occ.titulo && (
+                  <p style={{ margin: '0 0 4px 0', fontSize: '13px', color: '#111827', fontWeight: 600 }}>
+                    {occ.titulo}
+                  </p>
+                )}
+                {dt && (
+                  <p style={{ margin: '2px 0', fontSize: '12px', color: '#4b5563' }}>
+                    <strong>Data/hora:</strong> {dt}
+                  </p>
+                )}
+                {occ.bairro && (
+                  <p style={{ margin: '2px 0', fontSize: '12px', color: '#4b5563' }}>
+                    <strong>Bairro:</strong> {occ.bairro}
+                  </p>
+                )}
+                {occ.criticidade && (
+                  <p style={{ margin: '2px 0', fontSize: '12px', color: '#4b5563' }}>
+                    <strong>Criticidade:</strong> {getCriticidadeLabel(occ.criticidade)}
+                  </p>
+                )}
+                {occ.estagio && (
+                  <p style={{ margin: '2px 0', fontSize: '12px', color: '#4b5563' }}>
+                    <strong>Estágio:</strong> {occ.estagio}
+                  </p>
+                )}
+                {occ.localizacao && (
+                  <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#6b7280' }}>
+                    {occ.localizacao}
+                  </p>
+                )}
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
+    </>
+  );
+};
+
+// Componente principal
+export const LeafletMap: React.FC<LeafletMapProps> = ({
+  stations,
+  mapType,
+  onMapTypeChange,
+  historicalMode,
+  historicalDate,
+  onHistoricalDateChange,
+  historicalDateTo,
+  onHistoricalDateToChange,
+  historicalTimeFrom = '00:00',
+  historicalTimeTo = '23:59',
+  onHistoricalTimeFromChange,
+  onHistoricalTimeToChange,
+  historicalTimeline,
+  selectedHistoricalTimestamp,
+  onHistoricalTimestampChange,
+  mapDataWindow: mapDataWindowProp,
+  onMapDataWindowChange,
+  historicalViewMode: historicalViewModeProp,
+  onHistoricalViewModeChange,
+  onApplyHistoricalFilter,
+  historicalRefreshing = false,
+  occurrenceLoading = false,
+  occurrenceError = null,
+  desiredAnalysisTime,
+  onDesiredAnalysisTimeChange,
+  occurrences,
+  showOccurrences,
+  onShowOccurrencesChange,
+  occurrenceDataSource = 'planilha',
+  onOccurrenceDataSourceChange,
+  planilhaLoadError = null,
+  onPlanilhaFileChange,
+  uploadedPlanilhaFileName = null,
+  onClearUploadedPlanilha,
+  planilhaUploadError = null,
+  planilhaGeocoding = false,
+  planilhaGeocodeProgress = null,
+  appliedShowOccurrences,
+  occurrenceTextFilter,
+  onOccurrenceTextFilterChange,
+  occurrenceCategoryFilter,
+  onOccurrenceCategoryFilterChange,
+  availableOccurrenceCategories,
+  isPlaying = false,
+  playingIndex = 0,
+  onPlayingIndexChange,
+  onPlayPause,
+  playbackMode = 'both',
+  onPlaybackModeChange,
+  playbackSpeed = 1000,
+  onPlaybackSpeedChange,
+  sortField,
+  sortDirection,
+  onSortChange,
+}) => {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const { bairrosData, loading, error } = useBairrosData();
+  const { zonasData, loading: loadingZonas } = useZonasPluvData();
+  const [showInfluenceLines, setShowInfluenceLines] = useState(true);
+  const [sidebarView, setSidebarView] = useState<'stations' | 'occurrences'>('stations');
+  const showHexagons = false;
+  const isMobileInitial = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+  const [showSidebar, setShowSidebar] = useState(!isMobileInitial);
+  const [showFiltersPanel, setShowFiltersPanel] = useState(!isMobileInitial);
+  const [isMobileView, setIsMobileView] = useState(isMobileInitial);
+  const [mapDataWindowInternal, setMapDataWindowInternal] = useState<MapDataWindow>('both');
+  const [isTableExpanded, setIsTableExpanded] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const update = () => {
+      const mobile = mq.matches;
+      setIsMobileView(mobile);
+      if (mobile) {
+        setShowFiltersPanel(false);
+        setShowSidebar(false);
+      } else {
+        setShowFiltersPanel(true);
+        setShowSidebar(true);
+      }
+    };
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  const mapDataWindow = mapDataWindowProp ?? mapDataWindowInternal;
+  const setMapDataWindow = onMapDataWindowChange ?? setMapDataWindowInternal;
+  const [historicalViewModeInternal, setHistoricalViewModeInternal] = useState<HistoricalViewMode>('instant');
+  const historicalViewMode = historicalViewModeProp ?? historicalViewModeInternal;
+  const setHistoricalViewMode = onHistoricalViewModeChange ?? setHistoricalViewModeInternal;
+  const hasAccumulated = stations.some((s) => s.accumulated != null);
+
+
+  // No modo Instantâneo, manter "Até" igual a "De" para buscar um único dia
+  useEffect(() => {
+    if (historicalViewMode === 'instant' && onHistoricalDateToChange && historicalDateTo !== historicalDate) {
+      onHistoricalDateToChange(historicalDate);
+    }
+  }, [historicalViewMode, historicalDate, historicalDateTo, onHistoricalDateToChange]);
+  const displayStations =
+    (historicalViewMode === 'accumulated') ? stations : stations.map((s) => ({ ...s, accumulated: undefined }));
+  const mapTypeConfig = MAP_TYPES.find((t: { id: MapTypeId }) => t.id === mapType) ?? MAP_TYPES[0];
+  const loadingAny = loading || loadingZonas;
+  const boundsData = zonasData ?? bairrosData;
+
+  if (loadingAny) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
+        <div className="text-center bg-white/90 rounded-xl border border-red-100 px-6 py-4 shadow-sm">
+          <p className="text-red-600 font-medium mb-2">Erro ao carregar mapa</p>
+          <p className="text-gray-500 text-sm">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!bairrosData && !zonasData) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
+        <p className="text-gray-500">Nenhum dado geográfico disponível</p>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={mapContainerRef} className="relative w-full h-full bg-gradient-to-br from-blue-50 to-blue-100 overflow-hidden">
+      {isMobileView && (showFiltersPanel || showSidebar) && (
+        <button
+          type="button"
+          aria-label="Fechar painel"
+          onClick={() => { setShowFiltersPanel(false); setShowSidebar(false); }}
+          className="fixed inset-0 z-[2050] bg-black/50 md:hidden"
+        />
+      )}
+
+      {/* Painel de filtros: no mobile fica ACIMA do header (z 2100); no desktop = sidebar */}
+      <div
+        className={`
+          z-[2100] md:z-[1400] flex flex-col overflow-x-hidden
+          transition-transform duration-300 ease-out
+          fixed left-0 top-0 bottom-0 w-[85vw] max-w-[320px] bg-white/98 shadow-xl border-r border-gray-200
+          md:absolute md:top-28 md:left-3 md:bottom-auto md:max-h-[calc(100vh-7rem)] md:min-w-[200px] md:w-[min(320px,calc(100vw-24px))] md:rounded-lg md:shadow-md md:border md:border-gray-200 md:bg-white/95 md:backdrop-blur
+          ${isMobileView ? (showFiltersPanel ? 'translate-x-0' : '-translate-x-full') : 'md:translate-x-0'}
+        `}
+      >
+        {showFiltersPanel ? (
+          <>
+            {isMobileView && (
+              <div className="flex items-center justify-between gap-2 shrink-0 border-b border-gray-200 bg-white px-3 py-2.5">
+                <span className="font-medium text-gray-800 text-sm">Filtros</span>
+                <button type="button" onClick={() => setShowFiltersPanel(false)} className="p-2 -m-2 rounded-lg hover:bg-gray-100 text-gray-600" aria-label="Fechar filtros">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+            {!isMobileView && (
+              <div className="shrink-0 flex items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 py-2">
+                <span className="text-xs font-semibold text-gray-700">Filtros do mapa</span>
+                <button type="button" onClick={() => setShowFiltersPanel(false)} className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100" title="Ocultar filtros">
+                  <ChevronLeft className="w-3.5 h-3.5" /> Ocultar filtros
+                </button>
+              </div>
+            )}
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-2 py-2 flex flex-col gap-2 scroll-touch min-w-0">
+              <MapLayers value={mapType} onChange={onMapTypeChange} />
+              <MapDataWindowToggle value={mapDataWindow} onChange={setMapDataWindow} />
+              <InfluenceLinesToggle value={showInfluenceLines} onChange={setShowInfluenceLines} />
+              <OccurrencesToggle value={showOccurrences ?? false} onChange={onShowOccurrencesChange ?? (() => { })} />
+              {(showOccurrences ?? false) && (
+                <>
+                  {historicalMode && (
+                    <>
+                      <OccurrenceSourceSelector
+                        value={occurrenceDataSource}
+                        onChange={onOccurrenceDataSourceChange ?? (() => { })}
+                      />
+                      {occurrenceDataSource === 'planilha' && planilhaLoadError && (
+                        <p className="text-[10px] text-amber-700 font-medium" role="alert">{planilhaLoadError}</p>
+                      )}
+                      {occurrenceDataSource === 'planilha' && onPlanilhaFileChange && (
+                        <OccurrencePlanilhaUpload
+                          onFileChange={onPlanilhaFileChange}
+                          uploadedFileName={uploadedPlanilhaFileName}
+                          onClearUpload={onClearUploadedPlanilha ?? (() => {})}
+                          uploadError={planilhaUploadError}
+                          geocoding={planilhaGeocoding}
+                          geocodeProgress={planilhaGeocodeProgress}
+                        />
+                      )}
+                    </>
+                  )}
+                  {!historicalMode && (
+                    <p className="text-[10px] text-gray-600">Ocorrências abertas (tempo real)</p>
+                  )}
+                  <OccurrenceFilters
+                  textFilter={occurrenceTextFilter ?? ''}
+                  onTextFilterChange={onOccurrenceTextFilterChange ?? (() => { })}
+                  categoryFilter={occurrenceCategoryFilter ?? []}
+                  onCategoryFilterChange={onOccurrenceCategoryFilterChange ?? (() => { })}
+                  availableCategories={availableOccurrenceCategories ?? []}
+                />
+                </>
+              )}
+              {historicalMode && (
+                <HistoricalViewModeToggle value={historicalViewMode} onChange={setHistoricalViewMode} hasAccumulated={hasAccumulated} />
+              )}
+              <HistoricalTimelineControl
+                enabled={historicalMode}
+                dateValue={historicalDate}
+                onDateChange={onHistoricalDateChange}
+                dateToValue={historicalDateTo ?? historicalDate}
+                onDateToChange={onHistoricalDateToChange ?? (() => { })}
+                timeFrom={historicalTimeFrom}
+                timeTo={historicalTimeTo}
+                onTimeFromChange={onHistoricalTimeFromChange ?? (() => { })}
+                onTimeToChange={onHistoricalTimeToChange ?? (() => { })}
+                timeline={historicalTimeline}
+                selectedTimestamp={selectedHistoricalTimestamp}
+                onTimestampChange={onHistoricalTimestampChange}
+                onApplyFilter={onApplyHistoricalFilter}
+                refreshing={historicalRefreshing}
+                occurrenceLoading={occurrenceLoading}
+                occurrenceError={occurrenceError}
+                viewMode={historicalViewMode}
+                desiredAnalysisTime={desiredAnalysisTime}
+                onDesiredAnalysisTimeChange={onDesiredAnalysisTimeChange}
+                showOccurrencesLoadInRealtime={!historicalMode && (showOccurrences ?? false) && occurrenceDataSource === 'api'}
+              />
+            </div>
+          </>
+        ) : (
+          !isMobileView && (
+            <button type="button" onClick={() => setShowFiltersPanel(true)} className="bg-white/95 backdrop-blur rounded-lg shadow-md border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2" title="Mostrar filtros">
+              <ChevronRight className="w-4 h-4" /> Mostrar filtros
+            </button>
+          )
+        )}
+      </div>
+
+      {isMobileView && !showFiltersPanel && (
+        <button type="button" onClick={() => setShowFiltersPanel(true)} className="fixed bottom-20 left-3 z-[2050] bg-white shadow-lg rounded-xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2 md:hidden" title="Abrir filtros">
+          <SlidersHorizontal className="w-5 h-5" /> Filtros
+        </button>
+      )}
+
+      {!isMobileView && (
+        <button type="button" onClick={() => setShowSidebar((v) => !v)} className="absolute top-28 right-3 z-[1300] bg-white/95 backdrop-blur rounded-lg shadow-md border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2" title={showSidebar ? 'Ocultar tabela' : 'Mostrar tabela'}>
+          {showSidebar ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />} {showSidebar ? 'Ocultar dados' : 'Mostrar dados'}
+        </button>
+      )}
+      {isMobileView && !showSidebar && (
+        <button type="button" onClick={() => setShowSidebar(true)} className="fixed bottom-20 right-3 z-[2050] bg-white shadow-lg rounded-xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2 md:hidden" title="Abrir tabela de dados">
+          <Table2 className="w-5 h-5" /> Dados
+        </button>
+      )}
+
+      {/* Tabela de dados: no mobile fica ACIMA do header (z 2100); no desktop = sidebar */}
+      <div
+        className={`
+          flex flex-col min-w-0 transition-all duration-300 ease-in-out overflow-x-hidden
+          fixed right-0 top-0 bottom-0
+          ${isTableExpanded
+            ? 'w-[95vw] md:w-[600px] lg:w-[650px] max-w-[700px] md:right-3 md:top-28 md:bottom-3 z-[2200] md:z-[2200] bg-white'
+            : 'w-[92vw] max-w-[420px] md:w-[min(500px,calc(100vw-24px))] md:absolute md:top-40 md:right-3 md:bottom-3 z-[2100] md:z-[1400]'
+          }
+          ${isMobileView ? (showSidebar ? 'translate-x-0' : 'translate-x-full') : showSidebar ? 'translate-x-0' : 'translate-x-[calc(100%+1rem)]'}
+        `}
+      >
+        <div className="h-full min-h-0 overflow-hidden rounded-l-xl border border-gray-200 bg-white shadow-xl flex flex-col md:rounded-xl">
+          {isMobileView && (
+            <div className="flex items-center justify-between gap-2 p-3 border-b border-gray-200 bg-gray-50/80 shrink-0">
+              <span className="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">
+                {sidebarView === 'stations' ? 'Dados das estações' : 'Ocorrências'}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setIsTableExpanded(!isTableExpanded)}
+                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 shrink-0 transition-colors"
+                  aria-label={isTableExpanded ? 'Restaurar tamanho' : 'Expandir tabela'}
+                >
+                  {isTableExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSidebar(false)}
+                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 shrink-0"
+                  aria-label="Fechar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto scroll-touch min-w-0">
+            <div className="px-3 pt-3 pb-2 border-b border-gray-200 bg-white sticky top-0 z-10 flex items-center justify-between gap-2">
+              <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 text-[11px] text-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setSidebarView('stations')}
+                  className={`px-2.5 py-1 rounded-md font-medium ${sidebarView === 'stations'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-transparent text-gray-700 hover:bg-white'
+                    }`}
+                >
+                  Estações
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSidebarView('occurrences')}
+                  className={`px-2.5 py-1 rounded-md font-medium ${sidebarView === 'occurrences'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-transparent text-gray-700 hover:bg-white'
+                    }`}
+                  disabled={!occurrences || occurrences.length === 0}
+                >
+                  Ocorrências
+                </button>
+              </div>
+
+              {!isMobileView && (
+                <button
+                  type="button"
+                  onClick={() => setIsTableExpanded(!isTableExpanded)}
+                  className="hidden md:flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
+                  aria-label={isTableExpanded ? 'Restaurar tamanho' : 'Expandir tabela'}
+                  title={isTableExpanded ? 'Restaurar tamanho' : 'Expandir tabela'}
+                >
+                  {isTableExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+              )}
+            </div>
+            <div className={`p-3 transition-all duration-300 ${isTableExpanded ? 'md:p-6' : ''}`}>
+              {sidebarView === 'stations' && (
+                <RainDataTable
+                  stations={stations}
+                  embedded
+                  showAccumulatedColumn={historicalMode && hasAccumulated}
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSortChange={onSortChange}
+                />
+
+              )}
+              {sidebarView === 'occurrences' && (
+                <OccurrenceTable occurrences={occurrences} embedded />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <MapContainer
+        center={[-21.761, -43.35]}
+        zoom={10}
+        style={{ height: '100%', width: '100%' }}
+        zoomControl={true}
+        scrollWheelZoom={true}
+        doubleClickZoom={true}
+        dragging={true}
+      >
+        <TileLayer
+          key={mapType}
+          attribution={mapTypeConfig.attribution}
+          url={mapTypeConfig.url}
+        />
+        <FitCityOnLoad boundsData={boundsData} />
+        <FocusCityButton boundsData={boundsData} />
+        {zonasData && (
+          <ZoneRainLayer
+            zonasData={zonasData}
+            stations={displayStations}
+            mapType={mapType}
+            timeWindow={mapDataWindow === '1h' ? '1h' : '15min'}
+            showAccumulated={(historicalMode && historicalViewMode === 'accumulated' && hasAccumulated)}
+            showInfluenceLines={showInfluenceLines}
+          />
+        )}
+        {bairrosData && <BairroPolygons bairrosData={bairrosData} showHexagons={showHexagons} />}
+        <StationMarkers
+          stations={displayStations}
+          mapDataWindow={mapDataWindow}
+          showAccumulated={(historicalMode && historicalViewMode === 'accumulated' && hasAccumulated)}
+        />
+        <OccurrenceMarkers occurrences={appliedShowOccurrences && (showOccurrences ?? false) ? occurrences : undefined} />
+      </MapContainer>
+
+      {/* Timeline Player - visible when data is loaded in historical mode */}
+      {historicalMode && historicalTimeline.length > 0 && onPlayPause && onPlayingIndexChange && onPlaybackModeChange && onPlaybackSpeedChange && (
+        <TimelinePlayerControl
+          timeline={historicalTimeline}
+          playingIndex={playingIndex}
+          onIndexChange={onPlayingIndexChange}
+          isPlaying={isPlaying}
+          onPlayPause={onPlayPause}
+          playbackMode={playbackMode}
+          onPlaybackModeChange={onPlaybackModeChange}
+          playbackSpeed={playbackSpeed}
+          onPlaybackSpeedChange={onPlaybackSpeedChange}
+        />
+      )}
+    </div>
+  );
+};
