@@ -28,6 +28,7 @@ export interface BairroCollection {
 }
 
 import { createCache } from '../utils/cache';
+import { fixBairroNameMojibake } from '../utils/fixBairroNameMojibake';
 import bairrosJfGeojsonUrl from '../../data/bairros-jf.geojson?url';
 
 /** Limite municipal Juiz de Fora–MG (IBGE código 3136702), formato GeoJSON */
@@ -73,7 +74,8 @@ const JUIZ_DE_FORA_BAIRROS_FALLBACK: BairroCollection = {
   ],
 };
 
-const BAIRROS_CACHE_KEY = 'bairros';
+/** Bump para invalidar cache após correção de nomes (mojibake). */
+const BAIRROS_CACHE_KEY = 'bairros_v2';
 
 /** Lista ordenada de nomes para filtros no mapa */
 export function listSortedBairroNomes(data: BairroCollection): string[] {
@@ -98,7 +100,7 @@ function normalizeJfOsmGeojsonToBairroCollection(raw: { features?: unknown[] }):
       continue;
     }
     const p = f.properties ?? {};
-    const nome = String(p.nome ?? p.name ?? `Bairro ${i + 1}`);
+    const nome = fixBairroNameMojibake(String(p.nome ?? p.name ?? `Bairro ${i + 1}`));
     i += 1;
     features.push({
       type: 'Feature',

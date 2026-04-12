@@ -35,7 +35,7 @@ function App() {
   const [appliedOccTimeFrom, setAppliedOccTimeFrom] = useState<string | null>(null);
   const [appliedOccDateTo, setAppliedOccDateTo] = useState<string | null>(null);
   const [appliedOccTimeTo, setAppliedOccTimeTo] = useState<string | null>(null);
-  const [mapType, setMapType] = useState<MapTypeId>('rua');
+  const [mapType, setMapType] = useState<MapTypeId>('satelite');
   // --- Playback state ---
   const [isPlaying, setIsPlaying] = useState(false);
   const [playingIndex, setPlayingIndex] = useState(0);
