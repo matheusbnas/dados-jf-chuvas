@@ -38,6 +38,11 @@ export const InfluenceLegend: React.FC<InfluenceLegendProps> = ({
             <span className="text-[10px] sm:text-[11px] font-medium text-gray-700 break-words">{label}</span>
           </div>
         ))}
+        <div className="text-[9px] sm:text-[10px] text-gray-500 mt-1">
+          Com várias estações no mapa, cada mancha colorida é a área de influência aproximada (diagrama de Voronoi
+          recortado ao perímetro de Juiz de Fora), usando a chuva medida nesse ponto — não substitui malhas oficiais
+          por equipamento.
+        </div>
         {showHexagons && (
           <>
             <div className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5">

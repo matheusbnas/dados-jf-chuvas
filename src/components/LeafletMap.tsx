@@ -8,6 +8,7 @@ import { useBairrosData, useZonasPluvData } from '../hooks/useCitiesData';
 import { LoadingSpinner } from './LoadingSpinner';
 import { getRainLevel } from '../utils/rainLevel';
 import { ZoneRainLayer } from './ZoneRainLayer';
+import { PluviometerVoronoiLayer } from './PluviometerVoronoiLayer';
 import { RainDataTable, type SortField, type SortDirection } from './RainDataTable';
 import {
   MapLayers,
@@ -823,16 +824,26 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
         />
         <FitCityOnLoad boundsData={boundsData} />
         <FocusCityButton boundsData={boundsData} />
-        {zonasData && (
-          <ZoneRainLayer
-            zonasData={zonasData}
-            stations={displayStations}
-            mapType={mapType}
-            timeWindow={mapDataWindow === '1h' ? '1h' : '15min'}
-            showAccumulated={(historicalMode && historicalViewMode === 'accumulated' && hasAccumulated)}
-            showInfluenceLines={showInfluenceLines}
-          />
-        )}
+        {zonasData &&
+          (displayStations.length >= 2 ? (
+            <PluviometerVoronoiLayer
+              municipalityZona={zonasData.features[0]}
+              stations={displayStations}
+              mapType={mapType}
+              timeWindow={mapDataWindow === '1h' ? '1h' : '15min'}
+              showAccumulated={historicalMode && historicalViewMode === 'accumulated' && hasAccumulated}
+              showInfluenceLines={showInfluenceLines}
+            />
+          ) : (
+            <ZoneRainLayer
+              zonasData={zonasData}
+              stations={displayStations}
+              mapType={mapType}
+              timeWindow={mapDataWindow === '1h' ? '1h' : '15min'}
+              showAccumulated={(historicalMode && historicalViewMode === 'accumulated' && hasAccumulated)}
+              showInfluenceLines={showInfluenceLines}
+            />
+          ))}
         {showRiskAreas && riskAreasGeoJson && <RiskAreasLayer data={riskAreasGeoJson} />}
         {bairrosData && (
           <>
