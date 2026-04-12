@@ -583,7 +583,7 @@ export const HistoricalTimelineControl: React.FC<HistoricalTimelineControlProps>
     <div className={controlBoxClass} style={{ fontFamily: 'Arial, sans-serif' }}>
       <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold text-gray-700">
         <CalendarDays className="w-3.5 h-3.5 shrink-0" />
-        Histórico (CEMADEN 2026)
+        Histórico (CEMADEN)
       </div>
 
       <div className="text-[10px] text-gray-500 mb-2 space-y-0.5">
@@ -807,9 +807,11 @@ export const FitCityOnLoad: React.FC<FitCityOnLoadProps> = ({ boundsData }) => {
 
 interface FocusCityButtonProps {
   boundsData: BoundsGeoJson;
+  /** Quando o cabeçalho mostra faixa de erro, desce o botão para não ficar sob o aviso (z do cabeçalho > do mapa). */
+  headerErrorVisible?: boolean;
 }
 
-export const FocusCityButton: React.FC<FocusCityButtonProps> = ({ boundsData }) => {
+export const FocusCityButton: React.FC<FocusCityButtonProps> = ({ boundsData, headerErrorVisible = false }) => {
   const map = useMap();
 
   const handleFocus = () => {
@@ -818,11 +820,15 @@ export const FocusCityButton: React.FC<FocusCityButtonProps> = ({ boundsData }) 
     if (bounds) map.fitBounds(bounds, BAIRROS_BOUNDS_PROPS);
   };
 
+  const topClass = headerErrorVisible
+    ? 'top-44 sm:top-48'
+    : 'top-24 sm:top-28';
+
   return (
     <button
       type="button"
       onClick={handleFocus}
-      className="absolute top-24 left-1/2 z-[1400] flex min-w-0 max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-gray-200 bg-white/95 px-3 py-2 text-xs font-medium text-gray-700 shadow-md backdrop-blur transition-colors hover:bg-gray-50 active:bg-gray-100 sm:top-28"
+      className={`absolute left-1/2 z-[1400] flex min-w-0 max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-gray-200 bg-white/95 px-3 py-2 text-xs font-medium text-gray-700 shadow-md backdrop-blur transition-colors hover:bg-gray-50 active:bg-gray-100 ${topClass}`}
       title="Ajustar vista para o município inteiro"
     >
       <Map className="w-4 h-4 shrink-0" />

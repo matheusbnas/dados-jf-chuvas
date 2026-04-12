@@ -1,18 +1,28 @@
 import type { HistoricalRainParams, HistoricalRainRecord } from '../types/rain';
 import { buildHistoricalStationsTimelineFromRecords, type HistoricalStationsTimelineResult } from './gcpHistoricalRainApi';
 import { createCache } from '../utils/cache';
+import { getImportedCsvMap } from './cemadenImportStorage';
 
-const csvTextCache = createCache<string, string>({ ttlMs: 60 * 60 * 1000, maxEntries: 8 });
+const csvTextCache = createCache<string, string>({ ttlMs: 60 * 60 * 1000, maxEntries: 64 });
 
-/**
- * CSVs exportados do CEMADEN (Juiz de Fora) — um arquivo por mês de 2026.
- * Coloque os ficheiros em `public/data/cemaden/` (servidos em /data/cemaden/...).
- */
-const CEMADEN_CSV_URLS = [
-  '/data/cemaden/2026-01.csv',
-  '/data/cemaden/2026-02.csv',
-  '/data/cemaden/2026-03.csv',
-] as const;
+/** Anos a sondar em `/data/cemaden/YYYY-MM.csv` (404 ignora). Por defeito: ano atual ±1 para não abrir dezenas de pedidos; outros anos via importação no browser. */
+function staticCemadenYears(): number[] {
+  const y = new Date().getFullYear();
+  return [y - 1, y, y + 1];
+}
+
+function stripBom(text: string): string {
+  return text.replace(/^\uFEFF/, '');
+}
+
+function looksLikeCemadenCsvHeader(text: string): boolean {
+  const first = text.split(/\r?\n/).find((l) => l.trim());
+  if (!first) return false;
+  const lower = first.toLowerCase();
+  if (lower.includes('<!doctype') || lower.includes('<html')) return false;
+  const cols = first.split(';');
+  return cols.length >= 6 && (lower.includes('datahora') || lower.includes('data') || lower.includes('estacao'));
+}
 
 function parseDatahoraToIso(datahora: string): string {
   const t = datahora.trim().replace(/\.\d+$/, '');
@@ -24,8 +34,10 @@ function parseDatahoraToIso(datahora: string): string {
   return new Date(y, mo - 1, d, Number(h), Number(mi), s).toISOString();
 }
 
-function parseCemadenCsv(text: string): HistoricalRainRecord[] {
-  const lines = text.split(/\r?\n/).filter((line) => line.trim());
+/** Exportado para validação na importação de ficheiros. */
+export function parseCemadenCsv(text: string): HistoricalRainRecord[] {
+  const raw = stripBom(text);
+  const lines = raw.split(/\r?\n/).filter((line) => line.trim());
   const out: HistoricalRainRecord[] = [];
   for (let i = 1; i < lines.length; i++) {
     const parts = lines[i].split(';');
@@ -53,6 +65,22 @@ function parseCemadenCsv(text: string): HistoricalRainRecord[] {
   return out;
 }
 
+/**
+ * Infere `YYYY-MM` a partir das primeiras linhas de dados (coluna datahora).
+ */
+export function inferMonthKeyFromCemadenCsv(text: string): string | null {
+  const raw = stripBom(text);
+  const lines = raw.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return null;
+  for (let i = 1; i < Math.min(lines.length, 80); i++) {
+    const parts = lines[i].split(';');
+    const datahora = parts[6]?.trim() ?? '';
+    const m = datahora.match(/^(\d{4})-(\d{2})-/);
+    if (m) return `${m[1]}-${m[2]}`;
+  }
+  return null;
+}
+
 function filterRowsByParams(rows: HistoricalRainRecord[], params: HistoricalRainParams): HistoricalRainRecord[] {
   const df = params.dateFrom?.trim().slice(0, 10);
   const dt = params.dateTo?.trim().slice(0, 10);
@@ -75,32 +103,74 @@ function filterRowsByParams(rows: HistoricalRainRecord[], params: HistoricalRain
   });
 }
 
+function staticCemadenUrls(): string[] {
+  const urls: string[] = [];
+  for (const y of staticCemadenYears()) {
+    for (let mo = 1; mo <= 12; mo++) {
+      urls.push(`/data/cemaden/${y}-${String(mo).padStart(2, '0')}.csv`);
+    }
+  }
+  return urls;
+}
+
+async function fetchOneStaticCsv(url: string): Promise<string | null> {
+  const cached = csvTextCache.get(url);
+  if (cached) {
+    return looksLikeCemadenCsvHeader(cached) ? cached : null;
+  }
+  try {
+    const res = await fetch(url, { headers: { Accept: 'text/csv,*/*' } });
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!looksLikeCemadenCsvHeader(text)) return null;
+    csvTextCache.set(url, text);
+    return text;
+  } catch {
+    return null;
+  }
+}
+
+async function loadStaticCsvByMonth(): Promise<Map<string, string>> {
+  const urls = staticCemadenUrls();
+  const settled = await Promise.all(urls.map((url) => fetchOneStaticCsv(url)));
+  const byMonth = new Map<string, string>();
+  for (let i = 0; i < urls.length; i++) {
+    const text = settled[i];
+    if (!text) continue;
+    const ym = urls[i].match(/(\d{4}-\d{2})\.csv$/)?.[1];
+    if (ym) byMonth.set(ym, text);
+  }
+  return byMonth;
+}
+
 let mergedRowsPromise: Promise<HistoricalRainRecord[]> | null = null;
 
+async function safeImportedMap(): Promise<Map<string, string>> {
+  try {
+    return await getImportedCsvMap();
+  } catch {
+    return new Map();
+  }
+}
+
 async function loadAllCemadenRows(): Promise<HistoricalRainRecord[]> {
+  const [staticByMonth, imported] = await Promise.all([loadStaticCsvByMonth(), safeImportedMap()]);
+  for (const [ym, text] of imported) {
+    staticByMonth.set(ym, text);
+  }
+  const keys = [...staticByMonth.keys()].sort();
   const all: HistoricalRainRecord[] = [];
-  for (const url of CEMADEN_CSV_URLS) {
-    const cached = csvTextCache.get(url);
-    let text: string;
-    if (cached) {
-      text = cached;
-    } else {
-      const res = await fetch(url, { headers: { Accept: 'text/csv,*/*' } });
-      if (!res.ok) {
-        console.warn(`[CEMADEN local] Falha ao carregar ${url}: ${res.status}`);
-        continue;
-      }
-      text = await res.text();
-      csvTextCache.set(url, text);
-    }
-    all.push(...parseCemadenCsv(text));
+  for (const ym of keys) {
+    const text = staticByMonth.get(ym);
+    if (text) all.push(...parseCemadenCsv(text));
   }
   all.sort((a, b) => new Date(String(a.read_at)).getTime() - new Date(String(b.read_at)).getTime());
   return all;
 }
 
 /**
- * Histórico a partir dos CSV do CEMADEN em `public/data/cemaden/` (jan–mar/2026).
+ * Histórico a partir dos CSV do CEMADEN: ficheiros em `public/data/cemaden/` (quando existirem no deploy)
+ * e meses guardados localmente (IndexedDB) após importação no browser.
  */
 export async function fetchCemadenLocalHistoricalTimeline(
   params: HistoricalRainParams = {},
@@ -112,7 +182,7 @@ export async function fetchCemadenLocalHistoricalTimeline(
   return buildHistoricalStationsTimelineFromRecords(filtered, params, selectedTimestamp);
 }
 
-/** Invalida cache em memória (útil em testes). */
+/** Invalida cache em memória (após importar/remover CSV no browser ou em testes). */
 export function clearCemadenLocalCache(): void {
   mergedRowsPromise = null;
   csvTextCache.invalidate();

@@ -199,7 +199,7 @@ function App() {
     ? 'Demonstração'
     : isHistoricalMode
       ? dataSource === 'local'
-        ? 'CEMADEN 2026 (CSV)'
+        ? 'CEMADEN (CSV)'
         : 'Histórico (GCP / BigQuery)'
       : dataSource === 'gcp'
         ? 'Histórico (GCP)'
@@ -448,6 +448,7 @@ function App() {
     <div className="min-h-screen w-screen bg-gray-900 overflow-x-hidden">
       <div className="relative h-screen w-full overflow-hidden">
         <LeafletMap
+          headerErrorVisible={!!error && !useMockDemo}
           stations={stations}
           mapType={mapType}
           onMapTypeChange={setMapType}
@@ -528,6 +529,7 @@ function App() {
           }}
           hideOccurrenceControls={!ENABLE_OCCURRENCE_UI}
           hidePlaybackOccurrenceModes={!ENABLE_OCCURRENCE_UI}
+          onCemadenImportsChanged={refresh}
         />
 
 
@@ -598,7 +600,7 @@ function App() {
                   title={
                     isHistoricalMode
                       ? 'Voltar para tempo real/fallback automático'
-                      : 'Ativar filtro temporal histórico (CEMADEN 2026, CSV local)'
+                      : 'Ativar filtro temporal histórico (CEMADEN: CSV no site ou importado no navegador)'
                   }
                 >
                   {isHistoricalMode ? 'Tempo real' : 'Histórico'}
@@ -717,7 +719,7 @@ function App() {
           <p className="font-semibold text-slate-100">Juiz de Fora – MG | Dados meteorológicos INMET</p>
           <p className="text-slate-300">
             Chuva e variáveis da estação automática A83692 (Instituto Nacional de Meteorologia). Modo histórico: exportações
-            CSV do CEMADEN (jan.–mar./2026) servidas localmente.
+            Modo histórico: CSV CEMADEN em public/data/cemaden/ e/ou importados neste navegador.
           </p>
         </div>
       </footer>

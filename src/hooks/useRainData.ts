@@ -115,7 +115,7 @@ export const useRainData = (
         if (!timelineData.stations.length) {
           throw new Error(
             dateFrom === dateTo
-              ? `Sem dados históricos para ${dateFrom}. Confira os CSV em public/data/cemaden/ (2026-01/02/03).`
+              ? `Sem dados históricos para ${dateFrom}. Coloque CSV em public/data/cemaden/ ou importe no painel «CSV CEMADEN».`
               : `Sem dados históricos para o período ${dateFrom} a ${dateTo}`
           );
         }

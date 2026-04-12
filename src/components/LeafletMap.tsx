@@ -29,6 +29,7 @@ import { MAP_TYPES, type MapDataWindow, type HistoricalViewMode, type MapTypeId 
 import { getAccumulatedRainLevel, RAIN_LEVEL_PALETTE } from '../utils/rainLevel';
 import { getCriticidadeLabel } from '../utils/criticidade';
 import { TimelinePlayerControl } from './MapControls/TimelinePlayerControl';
+import { CemadenCsvImportPanel } from './CemadenCsvImportPanel';
 import type { GeoJsonObject } from 'geojson';
 import { listSortedBairroNomes, type BairroFeature, type BairroCollection } from '../services/citiesApi';
 import { useRiskAreasData } from '../hooks/useRiskAreasData';
@@ -121,6 +122,10 @@ interface LeafletMapProps {
   hideOccurrenceControls?: boolean;
   /** Quando true, o player da linha do tempo só permite modo chuva (sem Ocorrências/Ambos). */
   hidePlaybackOccurrenceModes?: boolean;
+  /** Após importar CSV CEMADEN (IndexedDB), recarrega dados históricos. */
+  onCemadenImportsChanged?: () => void;
+  /** Cabeçalho está a mostrar erro de dados — o botão «Ver cidade inteira» desce para não ser tapado. */
+  headerErrorVisible?: boolean;
 }
 
 function bairroStrokeColor(nome: string): string {
@@ -406,6 +411,8 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   onSortChange,
   hideOccurrenceControls = false,
   hidePlaybackOccurrenceModes = false,
+  onCemadenImportsChanged,
+  headerErrorVisible = false,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const { bairrosData, loading, error } = useBairrosData();
@@ -653,6 +660,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
               {historicalMode && (
                 <HistoricalViewModeToggle value={historicalViewMode} onChange={setHistoricalViewMode} hasAccumulated={hasAccumulated} />
               )}
+              {historicalMode && <CemadenCsvImportPanel onStorageChanged={onCemadenImportsChanged} />}
               <HistoricalTimelineControl
                 enabled={historicalMode}
                 dateValue={historicalDate}

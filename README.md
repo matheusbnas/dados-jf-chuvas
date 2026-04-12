@@ -7,7 +7,7 @@ Aplicação web (React + Vite + Leaflet) para visualizar **chuva em tempo real**
 | Área | Descrição |
 |------|-----------|
 | **Tempo real** | Dados da estação **A83692** (INMET) via proxy Netlify `/api/inmet/*` → API pública apitempo. Atualização periódica (ex.: 5 min). |
-| **Histórico 2026** | CSVs CEMADEN em `public/data/cemaden/` (`2026-01.csv` … `2026-03.csv`), linha do tempo, instantâneo ou acumulado no período. |
+| **Histórico CEMADEN** | CSVs em `public/data/cemaden/YYYY-MM.csv` (sondagem ano−1…ano+1 no deploy) **ou** importação mensal no browser (IndexedDB). Linha do tempo, instantâneo ou acumulado. |
 | **Mapa base** | Tipos: Rua, **Satélite** (padrão), Escuro — tiles OpenStreetMap / Esri. |
 | **Influência pluviométrica** | Com **2+ estações**, células **Voronoi** recortadas ao perímetro municipal (`data/zonas-pluviometricas.geojson`); com **1 estação**, só contorno municipal (sem mancha sólida tapando o mapa). |
 | **Bairros** | Polígonos OSM (`data/bairros-jf.geojson`), cores por bairro, filtro “foco” no mapa; nomes corrigidos de mojibake em runtime. |
@@ -41,12 +41,12 @@ npm run preview   # testa a pasta dist
 
 | Caminho | Conteúdo |
 |---------|----------|
-| `public/data/cemaden/2026-01.csv` … `2026-03.csv` | Exportações CEMADEN (separador `;`, colunas incl. `datahora`, `valorMedida`). Necessários para o modo **Histórico**. |
+| `public/data/cemaden/YYYY-MM.csv` | Exportações CEMADEN no build (separador `;`). Meses em falta podem ser **importados** no modo Histórico (guardados só neste navegador). |
 | `data/bairros-jf.geojson` | Bairros de JF (OSM); empacotado pelo Vite. Sem este ficheiro, usa-se fallback IBGE (só contorno municipal). |
 | `data/zonas-pluviometricas.geojson` | Perímetro de referência municipal / zona pluviométrica (base para recorte Voronoi). |
 | `public/data/areas-risco-jf.geojson` | Polígonos de risco (gerado a partir do KML; ver script abaixo). |
 
-Coloque os CSVs CEMADEN em `public/data/cemaden/` com os nomes esperados pelo serviço (`cemadenLocalHistoricalApi.ts`).
+No **modo Histórico**, use **Importar CSV** no painel do mapa para registar meses sem ficheiro no repositório; para partilhar em equipa ou produção, adicione o `.csv` em `public/data/cemaden/` e faça deploy (ou, no futuro, base de dados / job automático).
 
 ## Variáveis de ambiente
 

@@ -24,7 +24,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
 
   const sourceDescription =
     dataSource === 'local'
-      ? 'Exportações CSV do CEMADEN (estações em Juiz de Fora), jan.–mar./2026 — ficheiros em public/data/cemaden/'
+      ? 'Exportações CSV do CEMADEN (Juiz de Fora): ficheiros em public/data/cemaden/ e/ou importados no painel do mapa (IndexedDB neste navegador)'
       : dataSource === 'gcp'
         ? 'Leituras históricas no BigQuery (GCP) via Netlify Function'
         : dataSource === 'mock'
