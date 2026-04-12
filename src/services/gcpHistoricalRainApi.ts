@@ -458,6 +458,14 @@ export function buildHistoricalStationsTimelineFromRecords(
     }
   });
 
+  /** Uma entrada por estação com lat/lng fixas (CSV / GCP), para o mapa mostrar todos os pluviômetros desde o 1.º quadro. */
+  const catalogById = new Map<string, RainStation>();
+  rows.forEach((record, index) => {
+    const station = toRainStation(record, index);
+    if (!station) return;
+    if (!catalogById.has(station.id)) catalogById.set(station.id, station);
+  });
+
   let timeline = Array.from(byTimestamp.keys()).sort(
     (a, b) => new Date(a).getTime() - new Date(b).getTime()
   );
@@ -484,7 +492,7 @@ export function buildHistoricalStationsTimelineFromRecords(
     return { timeline: [], selectedTimestamp: null, stations: [] };
   }
 
-  // Frame inicial em branco no horário De (data + Horário de): mapa começa vazio e preenche a partir do início
+  // Frame inicial em branco no horário De (data + Horário de): todas as estações do período visíveis com 0 mm até a 1.ª leitura
   let blankStartIso: string | null = null;
   if (bounds) {
     const startIso = bounds.start.toISOString();
@@ -519,11 +527,22 @@ export function buildHistoricalStationsTimelineFromRecords(
   };
   const ZERO_ACCUMULATED = { mm_15min: 0, mm_1h: 0, mm_accumulated: 0 };
 
+  for (const s of catalogById.values()) {
+    lastStateByStation.set(s.id, {
+      ...s,
+      data: { ...ZERO_DATA },
+      accumulated: undefined,
+    });
+  }
+
   for (const ts of timeline) {
-    // Frame inicial em branco: todas as estações com chuva zerada
+    // Frame inicial em branco: todas as estações do período visíveis com chuva zerada (coordenadas fixas do CSV)
     if (blankStartIso && ts === blankStartIso) {
-      const firstFrameStations = Array.from(byTimestamp.get(timeline[1])?.values() ?? []);
-      const blankStations = firstFrameStations
+      const base =
+        catalogById.size > 0
+          ? Array.from(catalogById.values())
+          : Array.from(byTimestamp.get(timeline[1])?.values() ?? []);
+      const blankStations = base
         .map((s) => ({
           ...s,
           read_at: blankStartIso!,
@@ -532,7 +551,7 @@ export function buildHistoricalStationsTimelineFromRecords(
         }))
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
       stationsByTimestamp[ts] = blankStations;
-      blankStations.forEach((s) => lastStateByStation.set(s.id, s));
+      blankStations.forEach((st) => lastStateByStation.set(st.id, st));
       continue;
     }
     const stationsAtTs = Array.from(byTimestamp.get(ts)?.values() ?? []);

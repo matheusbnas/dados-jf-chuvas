@@ -628,9 +628,9 @@ function App() {
           </div>
 
           {error && !useMockDemo && (
-            <div className={`pointer-events-auto mx-auto max-w-6xl mt-2 rounded-xl border backdrop-blur px-3 py-2 text-xs sm:text-sm flex items-center gap-2 ${headerAlertClass}`}>
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span className="truncate">{error}</span>
+            <div className={`pointer-events-auto mx-auto max-w-6xl mt-2 rounded-xl border backdrop-blur px-3 py-2 text-xs sm:text-sm flex items-start gap-2 ${headerAlertClass}`}>
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span className="min-w-0 break-words leading-snug">{error}</span>
             </div>
           )}
         </div>

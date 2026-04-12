@@ -831,7 +831,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
           url={mapTypeConfig.url}
         />
         <FitCityOnLoad boundsData={boundsData} />
-        <FocusCityButton boundsData={boundsData} />
+        <FocusCityButton boundsData={boundsData} headerErrorVisible={headerErrorVisible} />
         {zonasData &&
           (displayStations.length >= 2 ? (
             <PluviometerVoronoiLayer
