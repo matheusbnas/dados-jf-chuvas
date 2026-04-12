@@ -4,15 +4,17 @@ import { Play, Pause, Square, SkipBack, SkipForward, FastForward } from 'lucide-
 type PlaybackMode = 'rain' | 'occurrences' | 'both';
 
 interface TimelinePlayerControlProps {
-    timeline: string[];
-    playingIndex: number;
-    onIndexChange: (index: number) => void;
-    isPlaying: boolean;
-    onPlayPause: (playing: boolean) => void;
-    playbackMode: PlaybackMode;
-    onPlaybackModeChange: (mode: PlaybackMode) => void;
-    playbackSpeed: number;
-    onPlaybackSpeedChange: (speed: number) => void;
+  timeline: string[];
+  playingIndex: number;
+  onIndexChange: (index: number) => void;
+  isPlaying: boolean;
+  onPlayPause: (playing: boolean) => void;
+  playbackMode: PlaybackMode;
+  onPlaybackModeChange: (mode: PlaybackMode) => void;
+  playbackSpeed: number;
+  onPlaybackSpeedChange: (speed: number) => void;
+  /** Quando true, só reprodução por chuva (sem abas Ocorrências/Ambos). */
+  hideOccurrenceModes?: boolean;
 }
 
 export const TimelinePlayerControl: React.FC<TimelinePlayerControlProps> = ({
@@ -23,8 +25,9 @@ export const TimelinePlayerControl: React.FC<TimelinePlayerControlProps> = ({
     onPlayPause,
     playbackMode,
     onPlaybackModeChange,
-    playbackSpeed,
-    onPlaybackSpeedChange,
+  playbackSpeed,
+  onPlaybackSpeedChange,
+  hideOccurrenceModes = false,
 }) => {
     if (timeline.length === 0) return null;
 
@@ -63,7 +66,7 @@ export const TimelinePlayerControl: React.FC<TimelinePlayerControlProps> = ({
                     </p>
                 </div>
 
-                {/* Mode Tabs */}
+                {!hideOccurrenceModes && (
                 <div className="flex items-center rounded-xl border border-gray-200/60 bg-gray-50/50 p-1 text-[10px] font-bold text-gray-600 shrink-0">
                     {(['rain', 'occurrences', 'both'] as PlaybackMode[]).map((m) => (
                         <button
@@ -77,6 +80,7 @@ export const TimelinePlayerControl: React.FC<TimelinePlayerControlProps> = ({
                         </button>
                     ))}
                 </div>
+                )}
             </div>
 
             {/* Progress Slider */}

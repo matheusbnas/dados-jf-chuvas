@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Polygon, Marker, Popup } from 'react-leaflet';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { MapContainer, TileLayer, GeoJSON as GeoJSONLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { ChevronLeft, ChevronRight, SlidersHorizontal, Table2, X, Maximize2, Minimize2 } from 'lucide-react';
 import { RainStation } from '../types/rain';
@@ -28,6 +28,10 @@ import { MAP_TYPES, type MapDataWindow, type HistoricalViewMode, type MapTypeId 
 import { getAccumulatedRainLevel, RAIN_LEVEL_PALETTE } from '../utils/rainLevel';
 import { getCriticidadeLabel } from '../utils/criticidade';
 import { TimelinePlayerControl } from './MapControls/TimelinePlayerControl';
+import type { GeoJsonObject } from 'geojson';
+import { listSortedBairroNomes, type BairroFeature, type BairroCollection } from '../services/citiesApi';
+import { useRiskAreasData } from '../hooks/useRiskAreasData';
+import { RiskAreasLayer } from './RiskAreasLayer';
 import 'leaflet/dist/leaflet.css';
 
 // Fix para ícones do Leaflet
@@ -112,56 +116,66 @@ interface LeafletMapProps {
   sortField?: SortField;
   sortDirection?: SortDirection;
   onSortChange?: (field: SortField, direction: SortDirection) => void;
+  /** Quando true, oculta ocorrências (toggle, filtros, aba e marcadores). */
+  hideOccurrenceControls?: boolean;
+  /** Quando true, o player da linha do tempo só permite modo chuva (sem Ocorrências/Ambos). */
+  hidePlaybackOccurrenceModes?: boolean;
 }
 
-// Componente para criar polígonos dos bairros
-const BairroPolygons: React.FC<{ bairrosData: any; showHexagons: boolean }> = ({ bairrosData, showHexagons }) => {
+function bairroStrokeColor(nome: string): string {
+  let h = 0;
+  for (let i = 0; i < nome.length; i++) h = nome.charCodeAt(i) + ((h << 5) - h);
+  const hue = Math.abs(h) % 360;
+  return `hsl(${hue} 52% 34%)`;
+}
+
+function bairroFillColor(nome: string): string {
+  let h = 0;
+  for (let i = 0; i < nome.length; i++) h = nome.charCodeAt(i) + ((h << 5) - h);
+  const hue = Math.abs(h) % 360;
+  return `hsl(${hue} 42% 90%)`;
+}
+
+/** Ajusta o mapa ao polígono do bairro selecionado */
+const FitBairroBounds: React.FC<{ feature: BairroFeature | null }> = ({ feature }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (!feature) return;
+    const layer = L.geoJSON(feature as Parameters<typeof L.geoJSON>[0]);
+    const b = layer.getBounds();
+    if (b.isValid()) map.fitBounds(b, { padding: [40, 40], maxZoom: 15 });
+  }, [feature, map]);
+  return null;
+};
+
+/** Camada de bairros (GeoJSON): contornos distintos e destaque ao focar um nome */
+const BairroPolygons: React.FC<{
+  bairrosData: BairroCollection;
+  showHexagons: boolean;
+  focusBairroNome: string;
+}> = ({ bairrosData, showHexagons, focusBairroNome }) => {
   return (
-    <>
-      {bairrosData.features.map((feature: any, index: number) => {
-        const bairroName = feature.properties.nome;
-        // Removido: cores dos bairros - apenas bolinhas coloridas
-
-        // Converter coordenadas para o formato do Leaflet
-        let coordinates: number[][][] = [];
-
-        if (feature.geometry.type === 'MultiPolygon') {
-          coordinates = feature.geometry.coordinates[0];
-        } else if (feature.geometry.type === 'Polygon') {
-          coordinates = [feature.geometry.coordinates[0]];
-        }
-
-        // Converter para formato [lat, lng] do Leaflet
-        const leafletCoordinates = coordinates.map(polygon =>
-          polygon.map(coord => [coord[1], coord[0]] as [number, number]) // Inverter lat/lng
+    <GeoJSONLayer
+      data={bairrosData as GeoJsonObject}
+      style={(feat) => {
+        const nome = String((feat?.properties as { nome?: string } | null)?.nome ?? '');
+        const selected = focusBairroNome && nome === focusBairroNome;
+        const muted = focusBairroNome && !selected;
+        return {
+          color: showHexagons ? '#475569' : bairroStrokeColor(nome),
+          weight: selected ? 3 : 1.25,
+          opacity: muted ? 0.35 : 0.92,
+          fillColor: showHexagons ? '#F3F4F6' : bairroFillColor(nome),
+          fillOpacity: muted ? 0.04 : showHexagons ? 0 : 0.15,
+        };
+      }}
+      onEachFeature={(feature, layer) => {
+        const nome = String(feature.properties?.nome ?? '');
+        layer.bindPopup(
+          `<div style="padding:8px;font-family:Arial,sans-serif"><strong>${nome}</strong><p style="margin:4px 0 0;font-size:11px;color:#666">${String(feature.properties?.regiao_adm ?? 'Juiz de Fora')}</p></div>`
         );
-
-        return (
-          <Polygon
-            key={`bairro-${index}`}
-            positions={leafletCoordinates}
-            pathOptions={{
-              color: showHexagons ? '#475569' : '#9CA3AF',
-              weight: showHexagons ? 1.2 : 1,
-              opacity: showHexagons ? 0.85 : 0.5,
-              fillColor: '#F3F4F6',
-              fillOpacity: showHexagons ? 0 : 0.12,
-            }}
-          >
-            <Popup>
-              <div style={{ padding: '8px', fontFamily: 'Arial, sans-serif' }}>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#333' }}>
-                  {bairroName}
-                </h3>
-                <p style={{ margin: '0', fontSize: '12px', color: '#666' }}>
-                  {feature.properties.regiao_adm || 'MG'}
-                </p>
-              </div>
-            </Popup>
-          </Polygon>
-        );
-      })}
-    </>
+      }}
+    />
   );
 };
 
@@ -389,13 +403,35 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   sortField,
   sortDirection,
   onSortChange,
+  hideOccurrenceControls = false,
+  hidePlaybackOccurrenceModes = false,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const { bairrosData, loading, error } = useBairrosData();
   const { zonasData, loading: loadingZonas } = useZonasPluvData();
   const [showInfluenceLines, setShowInfluenceLines] = useState(true);
   const [sidebarView, setSidebarView] = useState<'stations' | 'occurrences'>('stations');
+
+  useEffect(() => {
+    if (hideOccurrenceControls) setSidebarView('stations');
+  }, [hideOccurrenceControls]);
   const showHexagons = false;
+  const [focusBairroNome, setFocusBairroNome] = useState('');
+  const sortedBairroNomes = useMemo(
+    () => (bairrosData ? listSortedBairroNomes(bairrosData) : []),
+    [bairrosData]
+  );
+  const focusBairroFeature = useMemo((): BairroFeature | null => {
+    if (!bairrosData || !focusBairroNome) return null;
+    return bairrosData.features.find((f) => f.properties.nome === focusBairroNome) ?? null;
+  }, [bairrosData, focusBairroNome]);
+  const showBairroDivisionUi = Boolean(bairrosData && bairrosData.features.length > 1);
+  const [showRiskAreas, setShowRiskAreas] = useState(false);
+  const {
+    data: riskAreasGeoJson,
+    loading: riskAreasLoading,
+    error: riskAreasError,
+  } = useRiskAreasData(showRiskAreas);
   const isMobileInitial = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
   const [showSidebar, setShowSidebar] = useState(!isMobileInitial);
   const [showFiltersPanel, setShowFiltersPanel] = useState(!isMobileInitial);
@@ -443,7 +479,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
 
   if (loadingAny) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
+      <div className="w-full h-full flex items-center justify-center bg-neutral-200">
         <LoadingSpinner />
       </div>
     );
@@ -451,7 +487,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
 
   if (error) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
+      <div className="w-full h-full flex items-center justify-center bg-neutral-200">
         <div className="text-center bg-white/90 rounded-xl border border-red-100 px-6 py-4 shadow-sm">
           <p className="text-red-600 font-medium mb-2">Erro ao carregar mapa</p>
           <p className="text-gray-500 text-sm">{error}</p>
@@ -462,14 +498,14 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
 
   if (!bairrosData && !zonasData) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
+      <div className="w-full h-full flex items-center justify-center bg-neutral-200">
         <p className="text-gray-500">Nenhum dado geográfico disponível</p>
       </div>
     );
   }
 
   return (
-    <div ref={mapContainerRef} className="relative w-full h-full bg-gradient-to-br from-blue-50 to-blue-100 overflow-hidden">
+    <div ref={mapContainerRef} className="relative w-full h-full bg-neutral-300 overflow-hidden">
       {isMobileView && (showFiltersPanel || showSidebar) && (
         <button
           type="button"
@@ -511,40 +547,106 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
               <MapLayers value={mapType} onChange={onMapTypeChange} />
               <MapDataWindowToggle value={mapDataWindow} onChange={setMapDataWindow} />
               <InfluenceLinesToggle value={showInfluenceLines} onChange={setShowInfluenceLines} />
-              <OccurrencesToggle value={showOccurrences ?? false} onChange={onShowOccurrencesChange ?? (() => { })} />
-              {(showOccurrences ?? false) && (
+              <div className="rounded-lg border border-amber-200/80 bg-amber-50/90 px-2 py-1.5">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 rounded border-gray-300"
+                    checked={showRiskAreas}
+                    onChange={(e) => setShowRiskAreas(e.target.checked)}
+                  />
+                  <span className="text-[11px] text-gray-800 leading-snug">
+                    <span className="font-semibold">Áreas de risco</span> (geológico / hidrológico — Defesa Civil JF)
+                  </span>
+                </label>
+                <p className="mt-1 text-[10px] text-gray-600 leading-snug pl-5">
+                  Sobrepõe às zonas de chuva para cruzar <strong>R1–R4</strong> com o impacto das chuvas de 2026. Fonte:{' '}
+                  <a
+                    className="text-blue-700 underline"
+                    href="https://www.pjf.mg.gov.br/subsecretarias/sspdc/mapeamento.php"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    SSPDC / mapeamento
+                  </a>
+                  .
+                </p>
+                {riskAreasLoading && (
+                  <p className="mt-1 text-[10px] text-amber-800 pl-5">A carregar polígonos (~6 MB)…</p>
+                )}
+                {riskAreasError && (
+                  <p className="mt-1 text-[10px] text-red-600 pl-5" role="alert">
+                    {riskAreasError}
+                  </p>
+                )}
+                <div className="mt-1.5 flex flex-wrap gap-1 pl-5 text-[9px] font-medium">
+                  <span className="rounded px-1 bg-teal-100 text-teal-900">R1</span>
+                  <span className="rounded px-1 bg-yellow-100 text-yellow-900">R2</span>
+                  <span className="rounded px-1 bg-orange-100 text-orange-900">R3</span>
+                  <span className="rounded px-1 bg-red-100 text-red-900">R4</span>
+                </div>
+              </div>
+              {showBairroDivisionUi && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50/80 px-2 py-1.5">
+                  <label className="block text-[11px] font-medium text-gray-600 mb-0.5" htmlFor="bairro-foco-select">
+                    Bairro (foco no mapa)
+                  </label>
+                  <select
+                    id="bairro-foco-select"
+                    className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-800"
+                    value={focusBairroNome}
+                    onChange={(e) => setFocusBairroNome(e.target.value)}
+                  >
+                    <option value="">Todos (visão geral)</option>
+                    {sortedBairroNomes.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[10px] text-gray-500 leading-snug">
+                    Limites por bairro (OpenStreetMap). Escolha um nome para destacar e ampliar.
+                  </p>
+                </div>
+              )}
+              {!hideOccurrenceControls && (
                 <>
-                  {historicalMode && (
+                  <OccurrencesToggle value={showOccurrences ?? false} onChange={onShowOccurrencesChange ?? (() => { })} />
+                  {(showOccurrences ?? false) && (
                     <>
-                      <OccurrenceSourceSelector
-                        value={occurrenceDataSource}
-                        onChange={onOccurrenceDataSourceChange ?? (() => { })}
+                      {historicalMode && (
+                        <>
+                          <OccurrenceSourceSelector
+                            value={occurrenceDataSource}
+                            onChange={onOccurrenceDataSourceChange ?? (() => { })}
+                          />
+                          {occurrenceDataSource === 'planilha' && planilhaLoadError && (
+                            <p className="text-[10px] text-amber-700 font-medium" role="alert">{planilhaLoadError}</p>
+                          )}
+                          {occurrenceDataSource === 'planilha' && onPlanilhaFileChange && (
+                            <OccurrencePlanilhaUpload
+                              onFileChange={onPlanilhaFileChange}
+                              uploadedFileName={uploadedPlanilhaFileName}
+                              onClearUpload={onClearUploadedPlanilha ?? (() => {})}
+                              uploadError={planilhaUploadError}
+                              geocoding={planilhaGeocoding}
+                              geocodeProgress={planilhaGeocodeProgress}
+                            />
+                          )}
+                        </>
+                      )}
+                      {!historicalMode && (
+                        <p className="text-[10px] text-gray-600">Ocorrências abertas (tempo real)</p>
+                      )}
+                      <OccurrenceFilters
+                        textFilter={occurrenceTextFilter ?? ''}
+                        onTextFilterChange={onOccurrenceTextFilterChange ?? (() => { })}
+                        categoryFilter={occurrenceCategoryFilter ?? []}
+                        onCategoryFilterChange={onOccurrenceCategoryFilterChange ?? (() => { })}
+                        availableCategories={availableOccurrenceCategories ?? []}
                       />
-                      {occurrenceDataSource === 'planilha' && planilhaLoadError && (
-                        <p className="text-[10px] text-amber-700 font-medium" role="alert">{planilhaLoadError}</p>
-                      )}
-                      {occurrenceDataSource === 'planilha' && onPlanilhaFileChange && (
-                        <OccurrencePlanilhaUpload
-                          onFileChange={onPlanilhaFileChange}
-                          uploadedFileName={uploadedPlanilhaFileName}
-                          onClearUpload={onClearUploadedPlanilha ?? (() => {})}
-                          uploadError={planilhaUploadError}
-                          geocoding={planilhaGeocoding}
-                          geocodeProgress={planilhaGeocodeProgress}
-                        />
-                      )}
                     </>
                   )}
-                  {!historicalMode && (
-                    <p className="text-[10px] text-gray-600">Ocorrências abertas (tempo real)</p>
-                  )}
-                  <OccurrenceFilters
-                  textFilter={occurrenceTextFilter ?? ''}
-                  onTextFilterChange={onOccurrenceTextFilterChange ?? (() => { })}
-                  categoryFilter={occurrenceCategoryFilter ?? []}
-                  onCategoryFilterChange={onOccurrenceCategoryFilterChange ?? (() => { })}
-                  availableCategories={availableOccurrenceCategories ?? []}
-                />
                 </>
               )}
               {historicalMode && (
@@ -570,7 +672,12 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
                 viewMode={historicalViewMode}
                 desiredAnalysisTime={desiredAnalysisTime}
                 onDesiredAnalysisTimeChange={onDesiredAnalysisTimeChange}
-                showOccurrencesLoadInRealtime={!historicalMode && (showOccurrences ?? false) && occurrenceDataSource === 'api'}
+                showOccurrencesLoadInRealtime={
+                  !hideOccurrenceControls &&
+                  !historicalMode &&
+                  (showOccurrences ?? false) &&
+                  occurrenceDataSource === 'api'
+                }
               />
             </div>
           </>
@@ -616,7 +723,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
           {isMobileView && (
             <div className="flex items-center justify-between gap-2 p-3 border-b border-gray-200 bg-gray-50/80 shrink-0">
               <span className="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">
-                {sidebarView === 'stations' ? 'Dados das estações' : 'Ocorrências'}
+                {hideOccurrenceControls ? 'Dados das estações' : sidebarView === 'stations' ? 'Dados das estações' : 'Ocorrências'}
               </span>
               <div className="flex items-center gap-1">
                 <button
@@ -640,6 +747,9 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
           )}
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto scroll-touch min-w-0">
             <div className="px-3 pt-3 pb-2 border-b border-gray-200 bg-white sticky top-0 z-10 flex items-center justify-between gap-2">
+              {hideOccurrenceControls ? (
+                <span className="text-[11px] font-semibold text-gray-800 px-1">Dados das estações</span>
+              ) : (
               <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 text-[11px] text-gray-700">
                 <button
                   type="button"
@@ -663,6 +773,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
                   Ocorrências
                 </button>
               </div>
+              )}
 
               {!isMobileView && (
                 <button
@@ -688,7 +799,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
                 />
 
               )}
-              {sidebarView === 'occurrences' && (
+              {!hideOccurrenceControls && sidebarView === 'occurrences' && (
                 <OccurrenceTable occurrences={occurrences} embedded />
               )}
             </div>
@@ -722,13 +833,31 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
             showInfluenceLines={showInfluenceLines}
           />
         )}
-        {bairrosData && <BairroPolygons bairrosData={bairrosData} showHexagons={showHexagons} />}
+        {showRiskAreas && riskAreasGeoJson && <RiskAreasLayer data={riskAreasGeoJson} />}
+        {bairrosData && (
+          <>
+            {focusBairroFeature && <FitBairroBounds feature={focusBairroFeature} />}
+            <BairroPolygons
+              bairrosData={bairrosData}
+              showHexagons={showHexagons}
+              focusBairroNome={focusBairroNome}
+            />
+          </>
+        )}
         <StationMarkers
           stations={displayStations}
           mapDataWindow={mapDataWindow}
           showAccumulated={(historicalMode && historicalViewMode === 'accumulated' && hasAccumulated)}
         />
-        <OccurrenceMarkers occurrences={appliedShowOccurrences && (showOccurrences ?? false) ? occurrences : undefined} />
+        <OccurrenceMarkers
+          occurrences={
+            hideOccurrenceControls
+              ? undefined
+              : appliedShowOccurrences && (showOccurrences ?? false)
+                ? occurrences
+                : undefined
+          }
+        />
       </MapContainer>
 
       {/* Timeline Player - visible when data is loaded in historical mode */}
@@ -743,6 +872,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
           onPlaybackModeChange={onPlaybackModeChange}
           playbackSpeed={playbackSpeed}
           onPlaybackSpeedChange={onPlaybackSpeedChange}
+          hideOccurrenceModes={hidePlaybackOccurrenceModes}
         />
       )}
     </div>

@@ -434,14 +434,14 @@ function computeAccumulatedPerStation(
 }
 
 /**
- * Busca dados de um período e agrupa por timestamp de leitura.
- * Retorna a lista de horários disponíveis e as estações do horário selecionado.
+ * Monta timeline e estações a partir de registros já carregados (ex.: CSV local).
+ * Reutiliza a mesma lógica de acumulado progressivo do GCP.
  */
-export async function fetchHistoricalRainStationsTimeline(
+export function buildHistoricalStationsTimelineFromRecords(
+  rawRows: HistoricalRainRecord[],
   params: HistoricalRainParams = {},
   selectedTimestamp?: string | null
-): Promise<HistoricalStationsTimelineResult> {
-  const rawRows = await fetchHistoricalRain({ limit: DEFAULT_HISTORICAL_LIMIT, sort: 'asc', ...params });
+): HistoricalStationsTimelineResult {
   const rows = enrichRecordsWithLocation(rawRows);
   const byTimestamp = new Map<string, Map<string, RainStation>>();
 
@@ -473,13 +473,13 @@ export async function fetchHistoricalRainStationsTimeline(
   if (timeline.length === 0) {
     if (rows.length > 0) {
       console.warn(
-        '[GCP histórico] API retornou',
+        '[Histórico] Registros sem localização válida ou fora do filtro. Linhas:',
         rows.length,
-        'linhas mas nenhuma com localização válida (latitude/longitude ou nome de estação que bata com pluviometros.json). Primeira linha (chaves):',
+        'Primeira linha (chaves):',
         Object.keys(rows[0] || {})
       );
     } else {
-      console.log('[GCP histórico] API retornou 0 linhas para o período.', params);
+      console.log('[Histórico] Nenhuma linha para o período.', params);
     }
     return { timeline: [], selectedTimestamp: null, stations: [] };
   }
@@ -612,6 +612,17 @@ export async function fetchHistoricalRainStationsTimeline(
     stationsByTimestamp,
     accumulatedByStation: currentAccumulated
   };
+}
+
+/**
+ * Busca dados de um período e agrupa por timestamp de leitura (BigQuery via Netlify).
+ */
+export async function fetchHistoricalRainStationsTimeline(
+  params: HistoricalRainParams = {},
+  selectedTimestamp?: string | null
+): Promise<HistoricalStationsTimelineResult> {
+  const rawRows = await fetchHistoricalRain({ limit: DEFAULT_HISTORICAL_LIMIT, sort: 'asc', ...params });
+  return buildHistoricalStationsTimelineFromRecords(rawRows, params, selectedTimestamp);
 }
 
 /**

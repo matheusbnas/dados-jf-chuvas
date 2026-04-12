@@ -583,7 +583,7 @@ export const HistoricalTimelineControl: React.FC<HistoricalTimelineControlProps>
     <div className={controlBoxClass} style={{ fontFamily: 'Arial, sans-serif' }}>
       <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold text-gray-700">
         <CalendarDays className="w-3.5 h-3.5 shrink-0" />
-        Histórico (GCP)
+        Histórico (CEMADEN 2026)
       </div>
 
       <div className="text-[10px] text-gray-500 mb-2 space-y-0.5">

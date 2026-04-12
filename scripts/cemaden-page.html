@@ -1,0 +1,726 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+	<title>Mapa Interativo</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+	<link href="/css/bootstrap.min.css" rel="stylesheet" media="screen"/>
+	<link href="/css/personalizado.css" rel="stylesheet" media="screen"/>
+	<link href="/css/temas/azul.css" rel="stylesheet" id="tema" media="screen"/>
+	<link href="css/label.css" rel="stylesheet" media="screen"/>
+	<link type="text/css" rel="stylesheet" href="/external-resources/js/jQuery/css/jqx.base.css"/>
+	<link type="text/css" rel="stylesheet" href="/external-resources/js/jQuery/css/jqx.classic.css"/>
+	<!-- Estilo jquery ui -->
+	<link rel="stylesheet" href="/resources/js/jQuery/css/uimetro/jquery-ui.css"/>
+	<style type="text/css">
+	.mapa2 {
+		position: absolute !important;
+		right: 70px !important;
+		top: 190px !important;
+		width: 226px !important;
+		height: 107px !important;
+		z-index: 1001 !important;
+		border:0px !important;
+
+	}
+	.zoomBox{
+		position: absolute;
+		margin-top: 18px;
+		margin-left: 50px;
+		width: 49px;
+		height: 53px;
+		z-index: 1000;
+		cursor: pointer;
+		background-image: url(img/zoombox.png);
+		background-repeat: no-repeat;
+		left: -10px;
+		top: 173px;
+	}
+	.full_iframe {
+		width:100%;
+		height: 350px;
+		border:none;
+	}
+	body .ui-dialog .ui-dialog-titlebar { height:45px;}
+	body .ui-dialog	.ui-dialog-titlebar-minimize { margin-top:2px;}
+	body .olControlMousePosition { top:730px;	height:30px;}
+
+	body .ui-dialog .ui-dialog-titlebar { height:45px;}
+	body .ui-dialog	.ui-dialog-titlebar-minimize { margin-top:2px;}
+	body .olControlMousePosition { top:730px;	height:30px;}
+	.popover { width:300px;}
+	.modal-backdrop { z-index:1000 !important;}
+	.modal-content { width:600px !important;}
+
+	.info{
+		max-width:150px;
+		min-height:60px;
+		background-color:#000;
+		color:#fff;
+		-webkit-border-radius: 15px;
+		-moz-border-radius: 15px;
+		border-radius: 15px;
+		padding:15px;
+		-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=60)";
+		filter: alpha(opacity=60);
+		-moz-opacity: 0.6;
+		-khtml-opacity: 0.6;
+		opacity: 0.6;
+		position:absolute;
+		display:none;
+		z-index: 10000;
+	}
+	#camadas_ativadas{
+		height: 500px;
+		overflow-y: visible !important;
+	}
+
+	.ativadas a{font-size: 13px !important;}
+	</style>
+
+
+	<script type="text/javascript" src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js"></script>
+	<script type="text/javascript" src="/resources/js/jQuery/jquery-1.7.1.min.js"></script>
+	<script type="text/javascript" src="/css/bootstrap.min.js"></script>
+	<script type="text/javascript" src="/external-resources/js/jQuery/jqxcore.js"></script>
+	<script type="text/javascript" src="/external-resources/js/jQuery/jqxswitchbutton.js"></script>
+	<script type="text/javascript" src="/external-resources/js/contextMenu/jquery.ui.position.js"></script>
+	<script type="text/javascript" src="/external-resources/js/contextMenu/jquery.contextMenu.js"></script>
+	<script type="text/javascript" src="/external-resources/js/Openlayers/OpenLayers.js"></script>
+	<script type="text/javascript" src="/external-resources/js/Openlayers/lib/OpenLayers/LabelMarker.js"></script>
+	<script type="text/javascript" src="/external-resources/js/jquery.blockUI.js"></script>
+	<script type="text/javascript" src="/external-resources/js/jQuery/jqxswitchbutton.js"></script>
+	<script type="text/javascript" src="/js/jquery-ui-1.10.3.custom.min.js"></script>
+	<!-- Script Menu horizontal icones dock -->
+	<script src="/template/js/interface.js"></script>
+
+	<script type="text/javascript" src="js/FeaturePopups.min.js"></script>
+	<script type="text/javascript" src="js/script.js"></script>
+	<script type="text/javascript" src="js/interativo.js"></script>
+	<script type="text/javascript" src="js/modal.min.js"></script>
+	<script type="text/javascript" src="js/modalmanager.min.js"></script>
+	<script src="/template/js/menu.js"></script>
+
+	<!-- Google Analytics -->
+	<!--script>
+	(function(i, s, o, g, r, a, m) {
+		i['GoogleAnalyticsObject'] = r;
+		i[r] = i[r] || function() {
+			(i[r].q = i[r].q || []).push(arguments)
+		}, i[r].l = 1 * new Date();
+		a = s.createElement(o),
+		m = s.getElementsByTagName(o)[0];
+		a.async = 1;
+		a.src = g;
+		m.parentNode.insertBefore(a, m)
+	})(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+	ga('create', 'UA-27704941-1', 'cemaden.gov.br');
+	ga('send', 'pageview');
+	</script-->
+
+	<script type="text/javascript">
+	$(function() {
+		$("#info").hide();
+		$(".ativadas").dialog({
+			position: {
+				of: $(document),
+				my: 'left+5 top+185',
+				at: 'left top',
+				collision: 'none',
+				width: 30
+			}
+		});
+		$(".legendas").dialog({
+			autoOpen: false,
+			position: {
+				of: $(document),
+				my: 'right-300 top+189',
+				at: 'right top',
+				collision: 'none'
+			}
+		});
+		$(".infoestacoes").dialog({
+			autoOpen: false,
+			position: {
+				of: $(document),
+				my: 'left+10 top+750',
+				at: 'left top',
+				collision: 'none'
+			}
+		});
+                $(".infoestacoesgeo").dialog({
+                        autoOpen: false,
+                        position: {
+                                of: $(document),
+                                my: 'left+10 top+750',
+                                at: 'left top',
+                                collision: 'none'
+                        }
+                });
+                $(".infoestacoesacqua").dialog({
+                        autoOpen: false,
+                        position: {
+                                of: $(document),
+                                my: 'left+10 top+750',
+                                at: 'left top',
+                                collision: 'none'
+                        }
+                });
+		$(".infoestacoeshidro").dialog({
+			autoOpen: false,
+			position: {
+				of: $(document),
+				my: 'left+10 top+750',
+				at: 'left top',
+				collision: 'none'
+			}
+		});
+		$(".infotoocang").dialog({
+			autoOpen: false,
+			position: {
+				of: $(document),
+				my: 'left+10 top+750',
+				at: 'left top',
+				collision: 'none'
+			}
+		});
+		$(".infotoocanm").dialog({
+			autoOpen: false,
+			position: {
+				of: $(document),
+				my: 'left+10 top+750',
+				at: 'left top',
+				collision: 'none'
+			}
+		});
+		$("#camadas_ativadas").accordion({header: "h3"});
+	});
+	$(".dropdown-menu > li > a.trigger").on("click", function(e) {
+		var current = $(this).next();
+		var grandparent = $(this).parent().parent();
+		if ($(this).hasClass('left-caret') || $(this).hasClass('right-caret'))
+		$(this).toggleClass('right-caret left-caret');
+		grandparent.find('.left-caret').not(this).toggleClass('right-caret left-caret');
+		grandparent.find(".sub-menu:visible").not(current).hide();
+		current.toggle();
+		e.stopPropagation();
+	});
+	$(".dropdown-menu > li > a:not(.trigger)").on("click", function() {
+		var root = $(this).closest('.dropdown');
+		root.find('.left-caret').toggleClass('right-caret left-caret');
+		root.find('.sub-menu:visible').hide();
+	});
+	</script>
+	<script type="text/javascript">
+	$(document).ready(function() {
+		$(".ajuda").popover({trigger: 'hover', width: '200', placement: 'right', title: 'Ajuda'});
+		$(".btnpcd").click(function() {
+			$("#tutorialpcd").modal('show');
+		});
+
+		$(".btncamdas").click(function() {
+			$("#tutorialcamadas").modal('show');
+		});
+
+		$(".btnradar").click(function() {
+			$("#tutorialradar").modal('show');
+		});
+
+		$(".btnsatelite").click(function() {
+			$("#tutorialsatelite").modal('show');
+		});
+	});
+	</script>
+	<!-- Script do Menu horizontal icones dock -->
+	<script type="text/javascript">
+	$(document).ready(
+		function()
+		{
+			$('#dock').Fisheye(
+				{
+					maxWidth: 60,
+					items: 'a',
+					itemsText: 'span',
+					container: '.dock-container',
+					itemWidth: 40,
+					proximity: 80,
+					alignment: 'left',
+					valign: 'bottom',
+					halign: 'center'
+				}
+			)
+		}
+	);
+	</script>
+
+        <!-- Matomo -->
+        <script>
+            var _paq = window._paq = window._paq || [];
+            _paq.push(['trackPageView']);
+            _paq.push(['enableLinkTracking']);
+            (function() {
+                var u="//analytics.cemaden.gov.br/matomo/";
+                _paq.push(['setTrackerUrl', u+'matomo.php']);
+                _paq.push(['setSiteId', '3']);
+                var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+                g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+            })();
+        </script>
+        <!-- End Matomo Code -->
+
+</head>
+<!--div id="tutorialpcd" class="modal fade bs-modal-lg">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+				<h4 class="modal-title">Tutorial - Camada Pluviômetros Automáticos</h4>
+			</div>
+			<div class="modal-body">
+				<iframe width="560" height="315" src="//www.youtube.com/embed/YEOoSOKyoAk?rel=0" frameborder="0" allowfullscreen></iframe>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+			</div>
+		</div>
+	</div>
+</div>
+<div id="tutorialcamadas" class="modal fade bs-modal-lg">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+				<h4 class="modal-title">Tutorial - Camadas padrão</h4>
+			</div>
+			<div class="modal-body">
+				<iframe width="560" height="315" src="//www.youtube.com/embed/40W4e_14CE4?rel=0" frameborder="0" allowfullscreen></iframe>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+			</div>
+		</div>
+	</div>
+</div>
+<div id="tutorialradar" class="modal fade bs-modal-lg">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+				<h4 class="modal-title">Tutorial - Camada Radar</h4>
+			</div>
+			<div class="modal-body">
+				<iframe width="560" height="315" src="//www.youtube.com/embed/B-n3QGUetyk?rel=0" frameborder="0" allowfullscreen></iframe>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+			</div>
+		</div>
+	</div>
+</div>
+<div id="tutorialsatelite" class="modal fade bs-modal-lg">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+				<h4 class="modal-title">Tutorial - Camada Satelite</h4>
+			</div>
+			<div class="modal-body">
+				<iframe width="560" height="315" src="//www.youtube.com/embed/nxeSW1OazRg?rel=0" frameborder="0" allowfullscreen></iframe>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+			</div>
+		</div>
+	</div>
+</div-->
+<body>
+	<!-- DIV para camadas ativas -->
+	<div id="ativadas_" class="ativadas ui-dialog" title="Camadas ativas (Hora UTC)">
+		<div id="camadas_ativadas">
+		</div><br/>
+	</div>
+	<!-- Fim -->
+	<!-- Padrao Nav topo -->
+	<nav class="navbar navbar-default" role="navigation">
+		<div class="navbar-header">
+			<button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex3-collapse">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<div class="logo">
+				<a href="https://www.gov.br/cemaden/pt-br" target="_blank"><img src="/template/img/logotopo.png" alt="cemaden" align="left"/></a>
+				<a class="navbar-brand titulosub" href="#"><span>MAPA</span> INTERATIVO</a>
+			</div>
+		</div>
+
+		<div class="collapse navbar-collapse navbar-ex3-collapse">
+			<p class="navbar-text slogan">Mapa Interativo da Rede Observacional para Monitoramento de Risco de Desastres Naturais do Cemaden</p>
+		</div>
+	</nav>
+	<!-- Menu Ferramentas -->
+	<!--				<ul id="gn-menu" class="gn-menu-main">
+	<li class="gn-trigger"><a class="gn-icon-menu"><span>&nbsp;</span></a>
+	<nav class="gn-menu-wrapper">
+	<div class="gn-scroller">
+	<ul class="gn-menu">
+	<li id="zoom_out"><a class="gn-icon gn-icon-zoomin">Zoom out</a></li>
+	<li id="zoom_in"><a class="gn-icon gn-icon-zoomout">Zoom in</a></li>
+	<li id="restaurar"><a class="gn-icon gn-icon-restaurar">Restaurar</a></li>
+</ul>
+</div>
+</nav>
+</li>
+</ul>-->
+<!-- /Menu ferramentas -->
+
+<!-- Menu Estilo Multilevel -->
+<nav class="navbar navbar-default multilevel" role="navigation">
+	<div class="navbar-header">
+		<button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+			<span class="sr-only">Toggle navigation</span>
+			<span class="icon-bar"></span>
+			<span class="icon-bar"></span>
+			<span class="icon-bar"></span>
+		</button>
+	</div>
+	<div class="collapse navbar-collapse navbar-ex1-collapse">
+		<ul class="nav navbar-nav">
+			<li class="dropdown">
+				<a href="#" class="dropdown-toggle ajuda" data-toggle="dropdown" data-content="Clique no menu para selecionar as camadas: limites Estaduais, Municípios Monitorados e localização do Cemaden">
+					<img src="/template/img/iconelayers.png"/><br/>Camadas Diversas
+					<b class="caret"></b>
+				</a>
+				<ul class="dropdown-menu">
+					<li><a id="limite_estadual" tabindex="-1" a href="#">Limites Estaduais</a></li>
+					<li><a id="muni_monitorado" tabindex="-1" a href="#">Municípios Monitorados</a></li>
+					<li><a id="marker_cemaden" tabindex="-1" a href="#">Cemaden</a></li>
+				</ul>
+			</li>
+			<li class="dropdown">
+				<a href="#" class="dropdown-toggle ajuda" data-toggle="dropdown" data-content="Clique no menu para selecionar os dados de Radar Meteorológico da rede do Cemaden">
+					<img src="/template/img/iconeradar.png" alt="radar"/><br/>Radares Meteorológico
+					<b class="caret"></b>
+				</a>
+				<ul class="dropdown-menu">
+					<li><a id="radar_natal" tabindex="-1" a href="#">Natal - PPI</a></li>
+					<li><a id="radar_petrolina" tabindex="-1" a href="#">Petrolina - PPI</a></li>
+					<li><a id="radar_jaraguari" tabindex="-1" a href="#">Jaraguari - PPI</a></li>
+					<li><a id="radar_maceio" tabindex="-1" a href="#">Maceió - PPI</a></li>
+					<li><a id="radar_sao_francisco" tabindex="-1" a href="#">São Francisco - PPI</a></li>
+					<li><a id="radar_salvador" tabindex="-1" a href="#">Salvador - PPI</a></li>
+					<li><a id="radar_tres_marias" tabindex="-1" a href="#">Três Marias - PPI</a></li>
+					<li><a id="radar_santa_teresa" tabindex="-1" a href="#">Santa Teresa - PPI</a></li>
+					<li><a id="radar_almenara" tabindex="-1" a href="#">Almenara - PPI</a></li>
+					<li><a id="ativa_todos_radares" tabindex="-1" a href="#" type="hidden"></a></li>
+				</ul>
+			</li>
+
+			<!--li class="dropdown">
+				<a href="#" class="dropdown-toggle ajuda" data-toggle="dropdown" data-content="Clique no menu para selecionar os produtos de satélite">
+					<img src="/template/img/iconesatelite.png" alt="satelite"/><br/>Satélite
+					<b class="caret"></b>
+				</a>
+				<ul class="dropdown-menu">
+					<li>
+						<a tabindex="-1" class="trigger right-caret">TOOCAN GOES</a>
+						<ul class="dropdown-menu sub-menu">
+							<li><a id="temperatura_goes" href="#">Temperatura de Brilho</a></li>
+							<li><a id="cluster_goes" href="#">Sistemas Convectivos</a></li>
+							<li>
+								<a class="trigger right-caret">Nowcasting</a>
+								<ul class="dropdown-menu sub-menu">
+									<li><a id="nc_goes_30" href="#">+30 min</a></li>
+									<li><a id="nc_goes_60" href="#">+60 min</a></li>
+									<li><a id="nc_goes_90" href="#">+90 min</a></li>
+									<li><a id="nc_goes_120" href="#">+120 min</a></li>
+								</ul>
+							</li>
+							<li><a id="toocang_centroides" href="#">Centroides</a></li>
+						</ul>
+					</li>
+					<li>
+						<a tabindex="-1" class="trigger right-caret">TOOCAN MSG</a>
+						<ul class="dropdown-menu sub-menu">
+							<li><a id="temperatura_msg"href="#">Temperatura de Brilho</a></li>
+							<li><a id="cluster_msg"href="#">Sistemas Convectivos</a></li>
+							<li>
+								<a class="trigger right-caret">Nowcasting</a>
+								<ul class="dropdown-menu sub-menu">
+									<li><a id="nc_msg_30" href="#">+30 min</a></li>
+									<li><a id="nc_msg_60" href="#">+60 min</a></li>
+									<li><a id="nc_msg_90" href="#">+90 min</a></li>
+									<li><a id="nc_msg_120" href="#">+120 min</a></li>
+								</ul>
+							</li>
+							<li><a id="toocanm_centroides" href="#">Centroides</a></li>
+						</ul>
+					</li>
+				</ul>
+			</li-->
+
+			<li class="dropdown">
+				<a href="#" class="dropdown-toggle ajuda" data-toggle="dropdown" data-content="Clique no menu para exibir os dados de pluviômetros da Rede do Cemaden, para exibir os graficos com os valores clique no icone da cor preta da localização desejada">
+					<img src="/template/img/iconepcd.png"/><br/>Estações
+					<b class="caret"></b>
+				</a>
+				<ul class="dropdown-menu">
+					<li><a id="estacoes" tabindex="-1" a href="#">Pluviometros Automaticos</a></li>
+					<li><a id="estacoes_hidrologicas" tabindex="-1" a href="#">Estações Hidrológicas</a></li>
+					<li><a id="estacoes_acqua" tabindex="-1" a href="#">Estações Acqua</a></li>
+                                        <li><a id="estacoes_geo" tabindex="-1" a href="#">Estações Geotécnicas</a></li>
+				</ul>
+			</li>
+			<li class="dropdown" id="camadas_ativas">
+				<a href="#" class="dropdown-toggle ajuda" data-content="Clique para exibir o menu suspenso de camadas ativas. No menu é possivel fechar cada camada individualmente.">
+					<img src="/template/img/iconemapa.png"/><br/>Camadas Ativas
+				</a>
+			</li>
+			<li class="dropdown" id="legendas">
+				<a href="#" class="dropdown-toggle ajuda" data-toggle="dropdown"	data-content="Clique no menu para selecionar as legendas das camadas ativas">
+					<img src="/template/img/iconerelatorio.png"/><br/>Legendas
+					<b class="caret"></b>
+				</a>
+				<ul class="dropdown-menu">
+					<li><a id="l_radar" tabindex="-1" a href="#">Radares</a></li>
+					<li><a id="l_pluvio" tabindex="-1" a href="#">Pluviômetros</a></li>
+					<li><a id="l_diversos" tabindex="-1" a href="#">Diversos</a></li>
+					<!--li><a id="l_toocan" tabindex="-1" a href="#">Toocan</a></li-->
+				</ul>
+			</li>
+			<li class="dropdown">
+				<a href="#" class="dropdown-toggle ajuda" data-toggle="dropdown" data-content="Acesse o menu Download de Dados para realizar solicitação de downloads de arquivos dos pluviômetros automáticos e radares meteorológicos Cemaden.">
+					<img src="/template/img/iconedownload.png" alt="download"/><br/>Download de Dados
+					<b class="caret"></b>
+				</a>
+				<ul class="dropdown-menu">
+					<li><a id="dados_radar" tabindex="-1" a href="#">Radares</a></li>
+					<li><a id="dados_pluv" tabindex="-1" a href="#">Estações Pluviométricas</a></li>
+                                        <li><a id="dados_hidro" tabindex="-1" a href="#">Estações Hidrológicas</a></li>
+                                        <li><a id="dados_acqua" tabindex="-1" a href="#">Estações Acqua</a></li>
+                                        <li><a id="dados_geo" tabindex="-1" a href="#">Estações Geotécnicas</a></li>
+				</ul>
+			</li>
+			<li class="dropdown" id="legendas">
+				<a href="#" class="dropdown-toggle ajuda" data-toggle="dropdown"	data-content="Selecione o tópico para acessar o Tutorial">
+					<img src="/template/img/iconeinfo2.png"/><br/>Ajuda
+					<b class="caret"></b>
+				</a>
+				<ul class="dropdown-menu">
+					<!--li><a href="#" class="btnpcd">Tutorial Camada Pluviômetros</a></li>
+					<li><a href="#" class="btncamdas">Tutorial Camadas Padrão</a></li>
+					<li><a href="#" class="btnradar">Tutorial Camada Radar</a></li>
+					<li><a href="#" class="btnsatelite">Tutorial Camada Satelite</a></li-->
+					<li><a target="_blank" href="/arquivos/MapaInterativo.pdf" class="btnmanual">Manual de Utilização</a></li>
+				</ul>
+			</li>
+		</ul>
+	</div>
+</nav>
+<!-- Fim Menu Multinivel -->
+<!-- Padrao box mensagens	-->
+<div class="mapa2" id="dl-switcher"></div>
+<div class="mensagens" style="margin-bottom:0px;">
+	<div class="col-md-8 msg"><!--span style="color: red;"><b>AVISO:</b> O(s) radar(es) de Natal-RN encontra(m)-se em manutenção.</span--></div>
+	<div class="col-md-4">
+		<div class="input-group busca" style="margin-bottom:7px;">
+			<input type="text" id="suacidade" name="suacidade" class="form-control input-sm" placeholder="cidade, uf">
+			<span class="input-group-btn">
+				<button id="buscar_cidade"	class="btn	btn-primary btn-sm btnestilo" type="button">Buscar</button>
+			</span>
+		</div>
+	</div>
+</div>
+<!-- Padrao conteudo -->
+<div id="map" style="width:auto; height:761px; border:#000">
+</div>
+<div id="msg" style="display:none; font-family: Verdana, Geneva, sans-serif; color: #FFF;">
+	<p><img src="img/busy.gif"/></p>
+	<p>Carregando...aguarde...</p>
+</div>
+<!-- /geral -->
+<!-- i -->
+
+<div id="modal_download" class="modal fade">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+				<h4 class="modal-title">Download - Dados Pluviométricos</h4>
+			</div>
+			<div class="modal-body">
+				<iframe name="myiframe" src="/download/download_form.php" style="width:100%; height:350px;border:0px;"></iframe>
+				<div class="alert alert-info">Para obter os dados pluviométricos das Estações do CEMADEN proceda da seguinte forma: Escolha a <b>UF</b> (e opcionalmente um Município), <b>Mês</b> e <b>Ano</b>. Entre com a <b>Confirmação de segurança</b> no local apropriado. Após o preenchimento, clique no botão <b>Download</b> para descarregar o arquivo com os dados mensais das estações da UF (ou Município) escolhido.</div>
+				<div class="alert alert-warning">Todos os dados do CEMADEN são registrados em UTC (<i>Coordinated Universal Time</i>/Tempo Universal Coordenado) ou GMT (<i>Greenwich Meridian Time</i>/Hora do Meridiano de Greenwich), que é a hora no meridiano de Greenwich, na Inglaterra. Esta é uma convenção internacional da Meteorologia e adotada em Bancos de Dados Ambientais. Em razão desta adoção, não se tem problemas de variação decorrentes dos 4 fusos horários do Brasil e nem com as mudanças ocasionadas pelo horário de verão. Hora Local (Horário de Brasília) = UTC-3. Ex.: No caso de chuva registrada às 12:00, os dados informados no site do CEMADEN marcarão 15:00.</div>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+			</div>
+		</div><!-- /.modal-content -->
+	</div><!-- /.modal-dialog -->
+</div>
+<div id="myModal" class="modal fade">
+	<div class="	modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+				<h4 class="modal-title">Localização - CEMADEN</h4>
+			</div>
+			<div class="modal-body">
+				<p>Centro Nacional de Monitoramento e Alerta de Desastres Naturais</p>
+				<p>Estrada Doutor Altino Bonsesan, 500, PIT, CE IV</p>
+				<p>CEP: 12247-016, São José dos Campos/SP, Brasil</p>
+				<p><a href="https://www.gov.br/cemaden/pt-br" target="_blank">Mais informações</a></p>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+			</div>
+		</div> <!--/.modal-content-->
+	</div> <!--/.modal-dialog -->
+</div>
+<!-- /.modal -->
+
+<div id="modal_download_geo" class="modal fade">
+        <div class="modal-dialog">
+                <div class="modal-content">
+                        <div class="modal-header">
+                                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                                <h4 class="modal-title">Download - Dados de PCDs Geotécnicas</h4>
+                        </div>
+                        <div class="modal-body">
+                                <iframe name="myiframe" src="/download/download_form.php?type=10" style="width:100%; height:450px;border:0px;"></iframe>
+                                <div class="alert alert-info">Para obter os dados das PCDs Acqua do CEMADEN proceda da seguinte forma: Escolha a <b>UF</b> (e opcionalmente um Município), <b>Mês</b> e <b>Ano</b>. Entre com seu <b>Nome</b>, endereço de <b>E-mail</b> e <b>Confirmação de segurança</b> nos locais apropriados. Após o preenchimento e o clique no botão <b>Download</b> será enviado um e-mail com um <em>link</em> para descarregar o arquivo com os dados mensais das estações da UF (ou Município) escolhido.</div>
+                                <div class="alert alert-warning">Todos os dados do CEMADEN são registrados em UTC (<i>Coordinated Universal Time</i>/Tempo Universal Coordenado) ou GMT (<i>Greenwich Meridian Time</i>/Hora do Meridiano de Greenwich), que é a hora no meridiano de Greenwich, na Inglaterra. Esta é uma convenção internacional da Meteorologia e adotada em Bancos de Dados Ambientais. Em razão desta adoção, não se tem problemas de variação decorrentes dos 4 fusos horários do Brasil e nem com as mudanças ocasionadas pelo horário de verão. Hora Local (Horário de Brasília) = UTC-3. Ex.: No caso de chuva registrada às 12:00, os dados informados no site do CEMADEN marcarão 15:00.</div>
+                        </div>
+                        <div class="modal-footer">
+                                <button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+                        </div>
+                </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+</div>
+<div id="modal_download_acqua" class="modal fade">
+        <div class="modal-dialog">
+                <div class="modal-content">
+                        <div class="modal-header">
+                                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                                <h4 class="modal-title">Download - Dados de PCDs Acqua</h4>
+                        </div>
+                        <div class="modal-body">
+                                <iframe name="myiframe" src="/download/download_form.php?type=5" style="width:100%; height:450px;border:0px;"></iframe>
+                                <div class="alert alert-info">Para obter os dados das PCDs Acqua do CEMADEN proceda da seguinte forma: Escolha a <b>UF</b> (e opcionalmente um Município), <b>Mês</b> e <b>Ano</b>. Entre com seu <b>Nome</b>, endereço de <b>E-mail</b> e <b>Confirmação de segurança</b> nos locais apropriados. Após o preenchimento e o clique no botão <b>Download</b> será enviado um e-mail com um <em>link</em> para descarregar o arquivo com os dados mensais das estações da UF (ou Município) escolhido.</div>
+                                <div class="alert alert-warning">Todos os dados do CEMADEN são registrados em UTC (<i>Coordinated Universal Time</i>/Tempo Universal Coordenado) ou GMT (<i>Greenwich Meridian Time</i>/Hora do Meridiano de Greenwich), que é a hora no meridiano de Greenwich, na Inglaterra. Esta é uma convenção internacional da Meteorologia e adotada em Bancos de Dados Ambientais. Em razão desta adoção, não se tem problemas de variação decorrentes dos 4 fusos horários do Brasil e nem com as mudanças ocasionadas pelo horário de verão. Hora Local (Horário de Brasília) = UTC-3. Ex.: No caso de chuva registrada às 12:00, os dados informados no site do CEMADEN marcarão 15:00.</div>
+                        </div>
+                        <div class="modal-footer">
+                                <button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+                        </div>
+                </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+</div>
+<div id="modal_download_hidro" class="modal fade">
+        <div class="modal-dialog">
+                <div class="modal-content">
+                        <div class="modal-header">
+                                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                                <h4 class="modal-title">Download - Dados de PCDs Hidrológicas</h4>
+                        </div>
+                        <div class="modal-body">
+                                <iframe name="myiframe" src="/download/download_form.php?type=3" style="width:100%; height:450px;border:0px;"></iframe>
+                                <div class="alert alert-info">Para obter os dados hidrológicos das Estações do CEMADEN proceda da seguinte forma: Escolha a <b>UF</b> (e opcionalmente um Município), <b>Mês</b> e <b>Ano</b>. Entre com seu <b>Nome</b>, endereço de <b>E-mail</b> e <b>Confirmação de segurança</b> nos locais apropriados. Após o preenchimento e o clique no botão <b>Download</b> será enviado um e-mail com um <em>link</em> para descarregar o arquivo com os dados mensais das estações da UF (ou Município) escolhido.</div>
+                                <div class="alert alert-warning">Todos os dados do CEMADEN são registrados em UTC (<i>Coordinated Universal Time</i>/Tempo Universal Coordenado) ou GMT (<i>Greenwich Meridian Time</i>/Hora do Meridiano de Greenwich), que é a hora no meridiano de Greenwich, na Inglaterra. Esta é uma convenção internacional da Meteorologia e adotada em Bancos de Dados Ambientais. Em razão desta adoção, não se tem problemas de variação decorrentes dos 4 fusos horários do Brasil e nem com as mudanças ocasionadas pelo horário de verão. Hora Local (Horário de Brasília) = UTC-3. Ex.: No caso de chuva registrada às 12:00, os dados informados no site do CEMADEN marcarão 15:00.</div>
+                        </div>
+                        <div class="modal-footer">
+                                <button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+                        </div>
+                </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+</div>
+<div id="myModal" class="modal fade">
+        <div class="    modal-dialog">
+                <div class="modal-content">
+                        <div class="modal-header">
+                                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                                <h4 class="modal-title">Localização - CEMADEN</h4>
+                        </div>
+                        <div class="modal-body">
+                                <p>Centro Nacional de Monitoramento e Alerta de Desastres Naturais</p>
+                                <p>Rodovia Presidente Dutra, Km 40, SP-RJ</p>
+                                <p>CEP: 12630-000, Cachoeira Paulista, SP, Brasil</p>
+                                <p><a href="https://www.gov.br/cemaden/pt-br" target="_blank">Mais informações</a></p>
+                        </div>
+                        <div class="modal-footer">
+                                <button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+                        </div>
+                </div> <!--/.modal-content-->
+        </div> <!--/.modal-dialog -->
+</div>
+
+<div id="modal_download_radar" class="modal fade">
+	<div class="	modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+				<h4 class="modal-title">Download - Dados de Radares</h4>
+			</div>
+			<div class="modal-body">
+				<!--iframe class="full_iframe" src="/download/ftp/index.php" frameborder="0" allowtransparency="true"></iframe-->
+                                <iframe class="full_iframe" src="/download/downradares.php" frameborder="0" allowtransparency="true"></iframe>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+			</div>
+		</div><!-- /.modal-content -->
+	</div><!-- /.modal-dialog -->
+</div>
+
+<div id="myModal" class="modal fade">
+	<div class="	modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+				<h4 class="modal-title">Localização - CEMADEN</h4>
+			</div>
+			<div class="modal-body">
+				<p>Centro Nacional de Monitoramento e Alerta de Desastres Naturais</p>
+				<p>Rodovia Presidente Dutra, Km 40, SP-RJ</p>
+				<p>CEP: 12630-000, Cachoeira Paulista, SP, Brasil</p>
+				<p><a href="https://www.gov.br/cemaden/pt-br" target="_blank">Mais informações</a></p>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+			</div>
+		</div> <!--/.modal-content-->
+	</div> <!--/.modal-dialog -->
+</div>
+<!-- /.modal -->
+
+<!--bottom dock -->
+<div class="dock" id="dock" style="bottom:110px;z-index: 9899;">
+	<div class="dock-container" style="padding-right:120px;">
+		<a id="zoom_in" class="dock-item" href="#"><span>Zoom In</span><img src="/template/img/iconezoominferramenta.png" alt="Zoom In" /></a>
+		<a id="zoom_out" class="dock-item" href="#"><span>Zoom Out</span><img src="/template/img/iconezoomoutferramenta.png" alt="Zoom Out" /></a>
+		<a id="restaurar" class="dock-item" href="#"><span>Mapa Inicial</span><img src="/template/img/iconereloadferramenta.png " alt="Mapa Inicial"	/></a>
+	</div>
+</div>
+<!-- Padrao Footer -->
+<div class="panel-footer rodape" style="height:35px;">
+	<p class="text-muted">Cemaden - <a href="https://www.gov.br/cemaden/pt-br">Centro Nacional de Monitoramento e Alertas de Desastres Naturais.</a></p>
+</div>
+<div id="container" class="container">
+	<div id="info" class="info"></div>
+</div>
+<!-- DIV para legendas -->
+<div id="leg_toocan" class="legendas ui-dialog" title="Toocan"><img src="/template/img/legendas/legenda_toocan_brilho.png"/></div>
+<div id="leg_radar" class="legendas ui-dialog" title="Radar"><img src="/template/img/legendas/legendaradar.png"/></div>
+<div id="leg_pluvio" class="legendas ui-dialog" title="Pluviômetro"><img src="/template/img/legendas/legendapcd.png"/></div>
+<div id="leg_diversos" class="legendas ui-dialog" title="Diversos"><img src="/template/img/legendas/legendadiversos2.png"/></div>
+<div id="infopcd" class="infoestacoes ui-dialog" title="Informações do Pluviômetro"></div>
+<div id="infogeo" class="infoestacoesgeo ui-dialog" title="Informações E. Geotécnicas"></div>
+<div id="infoacqua" class="infoestacoesacqua ui-dialog" title="Informações E. Acqua"></div>
+<div id="infohidro" class="infoestacoeshidro ui-dialog" title="Informações E. Hidrológicas"></div>
+<div id="infotoocang" class="infotoocang ui-dialog" title="Informações Toocan GOES"></div>
+<div id="infotoocanm" class="infotoocang ui-dialog" title="Informações Toocan MSG"></div>
+<!-- Fim -->
+</body>
+</html>

@@ -28,6 +28,7 @@ export interface BairroCollection {
 }
 
 import { createCache } from '../utils/cache';
+import bairrosJfGeojsonUrl from '../../data/bairros-jf.geojson?url';
 
 /** Limite municipal Juiz de Fora–MG (IBGE código 3136702), formato GeoJSON */
 const JF_IBGE_MALHA_URL =
@@ -74,6 +75,55 @@ const JUIZ_DE_FORA_BAIRROS_FALLBACK: BairroCollection = {
 
 const BAIRROS_CACHE_KEY = 'bairros';
 
+/** Lista ordenada de nomes para filtros no mapa */
+export function listSortedBairroNomes(data: BairroCollection): string[] {
+  return [...new Set(data.features.map((f) => f.properties.nome))].sort((a, b) =>
+    a.localeCompare(b, 'pt-BR')
+  );
+}
+
+function normalizeJfOsmGeojsonToBairroCollection(raw: { features?: unknown[] }): BairroCollection {
+  const list = Array.isArray(raw.features) ? raw.features : [];
+  const features: BairroFeature[] = [];
+  let i = 0;
+  for (const f of list as Array<{ geometry?: { type?: string; coordinates?: unknown }; properties?: Record<string, unknown> }>) {
+    if (!f.geometry?.type) continue;
+    const g = f.geometry;
+    let coordinates: number[][][][];
+    if (g.type === 'Polygon' && Array.isArray(g.coordinates)) {
+      coordinates = [g.coordinates as number[][][]];
+    } else if (g.type === 'MultiPolygon' && Array.isArray(g.coordinates)) {
+      coordinates = g.coordinates as number[][][][];
+    } else {
+      continue;
+    }
+    const p = f.properties ?? {};
+    const nome = String(p.nome ?? p.name ?? `Bairro ${i + 1}`);
+    i += 1;
+    features.push({
+      type: 'Feature',
+      id: i,
+      geometry: { type: 'MultiPolygon', coordinates },
+      properties: {
+        objectid: i,
+        nome,
+        regiao_adm: 'Juiz de Fora',
+        area_plane: String(p.id ?? ''),
+        codbairro: String(i),
+        codra: 0,
+        codbnum: i,
+        link: 'OpenStreetMap (ODbL)',
+        rp: 'Zona da Mata',
+        cod_rp: 'MG',
+        codbairro_long: 3136702,
+        st_area: 0,
+        st_perimeter: 0,
+      },
+    });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
 interface IbgeMalhaResponse {
   type: 'FeatureCollection';
   features: Array<{
@@ -112,10 +162,26 @@ function ibgeToBairroCollection(data: IbgeMalhaResponse): BairroCollection {
   };
 }
 
-/** Contorno municipal de Juiz de Fora–MG (IBGE), para o mapa base (cache 1 h) */
+/** Limite dos bairros (polígonos) ou contorno municipal IBGE se o GeoJSON local falhar */
 export const fetchRioBairrosData = async (): Promise<BairroCollection> => {
   const cached = BAIRROS_CACHE.get(BAIRROS_CACHE_KEY);
   if (cached) return cached;
+  try {
+    const localRes = await fetch(bairrosJfGeojsonUrl, {
+      headers: { Accept: 'application/geo+json, application/json, */*' },
+    });
+    if (localRes.ok) {
+      const raw = (await localRes.json()) as { features?: unknown[] };
+      const mapped = normalizeJfOsmGeojsonToBairroCollection(raw);
+      if (mapped.features.length > 0) {
+        BAIRROS_CACHE.set(BAIRROS_CACHE_KEY, mapped);
+        return mapped;
+      }
+    }
+  } catch (e) {
+    console.warn('GeoJSON de bairros (data/bairros-jf.geojson) indisponível, tentando IBGE:', e);
+  }
+
   try {
     const response = await fetch(JF_IBGE_MALHA_URL, {
       headers: { Accept: 'application/json' },

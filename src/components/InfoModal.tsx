@@ -7,7 +7,7 @@ interface InfoModalProps {
   isOpen: boolean;
   onClose: () => void;
   apiAvailable: boolean;
-  dataSource: 'api' | 'gcp' | 'mock';
+  dataSource: 'api' | 'gcp' | 'mock' | 'local';
   totalStations: number;
   stations: RainStation[];
 }
@@ -23,11 +23,13 @@ export const InfoModal: React.FC<InfoModalProps> = ({
   if (!isOpen) return null;
 
   const sourceDescription =
-    dataSource === 'gcp'
-      ? 'Leituras históricas no BigQuery (GCP) via Netlify Function'
-      : dataSource === 'mock'
-        ? 'Dados simulados para demonstração'
-        : 'API pública do INMET (apitempo.inmet.gov.br) — estação automática A83692, Juiz de Fora–MG';
+    dataSource === 'local'
+      ? 'Exportações CSV do CEMADEN (estações em Juiz de Fora), jan.–mar./2026 — ficheiros em public/data/cemaden/'
+      : dataSource === 'gcp'
+        ? 'Leituras históricas no BigQuery (GCP) via Netlify Function'
+        : dataSource === 'mock'
+          ? 'Dados simulados para demonstração'
+          : 'API pública do INMET (apitempo.inmet.gov.br) — estação automática A83692, Juiz de Fora–MG';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
@@ -154,7 +156,14 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${apiAvailable ? 'bg-green-500' : 'bg-red-500'}`}></div>
                   <span className="text-sm font-medium text-gray-800">
-                    Status da API: {apiAvailable ? 'Conectado' : dataSource === 'gcp' ? 'Indisponível (dados GCP ativos)' : 'Desconectado'}
+                    Status da API:{' '}
+                    {apiAvailable
+                      ? 'Conectado'
+                      : dataSource === 'local'
+                        ? 'N/A (histórico por CSV local)'
+                        : dataSource === 'gcp'
+                          ? 'Indisponível (dados GCP ativos)'
+                          : 'Desconectado'}
                   </span>
                 </div>
                 {totalStations > 0 && (

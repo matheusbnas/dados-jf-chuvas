@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link href="/css/bootstrap.min.css"
+	rel="stylesheet" media="screen"></link>
+<title>Baixar dados</title>
+<script type="text/javascript"
+	src="/resources/js/jQuery/jquery-1.7.1.min.js"></script>
+<script>
+$.urlParam = function(name){
+	var results = new RegExp('[\?&]' + name + '=([^&#]*)').exec(window.location.href);
+	
+	if (Array.isArray(results))
+		return results[1];
+	else
+		return ""	
+};
+
+var getDatas = function($stationtype){
+	$.ajax({
+        url: 'getperiodos.php',
+        type: 'POST',
+        data: { stationtype: $stationtype} ,
+        success: function (response) {
+        	updateDatas(response);        	
+        },
+        error: function () {
+            console.log("Error loading cities");
+        }
+    });
+};
+
+var updateDatas = function($datas){
+	$("#edAno").empty();
+	$ano = $.urlParam('ano');
+	$mes = $.urlParam('mes');
+	if($ano)
+		$ano = parseInt($ano);
+	
+	$datas = $datas.reverse();  
+	$.each($datas, function($key, $value) {
+        if ($value === $ano)
+            $selected = true;
+        else
+        	$selected = false;
+
+		
+    	$("#edAno").append(new Option($value, $value, $selected, $selected));
+	});
+
+	$("#edMes").val($mes);	
+};
+
+var getCidades = function($stationtype, callback){
+	$.ajax({
+        url: 'getcidades.php',
+        type: 'POST',
+        data: { stationtype: $stationtype} ,
+        success: function (response) {
+        	$("body").data("cidades", response);
+
+			if(callback)
+				callback();
+        	
+        },
+        error: function () {
+            console.log("Error loading cities");
+        }
+    });
+};
+
+var updateEstados = function() {
+	$data = $("body").data("cidades");
+	
+	$estados = $data.map(r => r.uf).sort().filter(function(item, pos, ary) {
+        return !pos || item != ary[pos - 1];
+    });
+
+	$uf = $.urlParam('uf');    
+
+	$("#idUF").empty();
+	$("#idUF").append(new Option("Selecione a UF", ""));
+    $.each($estados, function($key, $value) {
+        if ($value === $uf)
+            $selected = true;
+        else
+        	$selected = false;
+        
+    	$("#idUF").append(new Option($value, $value, $selected, $selected));
+	});
+
+    if($uf)
+    	updateCidades();
+	
+};
+
+var updateCidades = function() {
+	$data = $("body").data("cidades");
+	$estado = $("#idUF").val();
+	
+	$cidades = $data.filter(function(item, key) {
+        return item.uf === $estado;
+    });
+
+	$cidade = $.urlParam('cidade');
+
+	$("#cbxCidade").empty();
+	$("#cbxCidade").append(new Option("Todos os municipios", "--"));
+    $.each($cidades, function($key, $value) {
+        if ($value.id_municipio === $cidade)
+            $selected = true;
+        else
+        	$selected = false;
+
+        
+    	$("#cbxCidade").append(new Option($value.cidade, $value.id_municipio, $selected, $selected));
+	});
+	
+};
+
+var errormsg = function() {
+	switch ($.urlParam('error')) {
+    case "captha":
+        $("#postError > span").text("Captcha incorreto!");
+        $("#postError").removeClass("hide");
+        break;
+    case "filenotfound":
+    	$("#postError > span").text("Arquivo não encontrado!");
+    	$("#postError").removeClass("hide");
+        break;
+    case "empty_uf":
+    	$("#postError > span").text("Preencha o estado!");
+    	$("#postError").removeClass("hide");
+        break;
+    case "empty_year":
+    	$("#postError > span").text("Preencha o ano!");
+    	$("#postError").removeClass("hide");
+        break;
+    case "empty_month":
+    	$("#postError > span").text("Preencha o mês!");
+    	$("#postError").removeClass("hide");
+        break;
+    case "empty_captha":
+    	$("#postError > span").text("Preencha a confirmação de segurança!");
+    	$("#postError").removeClass("hide");
+        break;    
+	}
+};
+
+var fill_form = function($stationtype) {
+	getDatas($stationtype);
+	getCidades($stationtype, updateEstados);	
+	errormsg();		
+};
+
+$(document).ready(function(){
+	$stationtype = $.urlParam('type');
+	$stationtype = parseInt($stationtype);
+	fill_form($stationtype);
+	$("#tipoestacao").val($stationtype);		
+	$('#idUF').change(updateCidades);
+});
+		</script>
+</head>
+
+<body>
+	<div class="panel panel-default">
+		<div class="panel-heading"></div>
+		<div class="panel-body">
+			<form action="download_file.php" name="form" method="post">
+				<input type="hidden" name='tipoestacao' id='tipoestacao'>
+				<table>
+					<tr>
+						<td><label for="inputUF" class="control-label">UF</label> <select
+							name="idUF" id="idUF" class="form-control"></select></td>
+						<td><label for="inputMun" class="control-label">Município</label>
+							<select name='idCidade' id='cbxCidade' class="form-control"></select>
+						</td>
+					</tr>
+					<tr>
+						<td><label for="inputMes" class="control-label">Mês</label> <select
+							name='edMes' id='edMes' class="form-control">
+								<option value="1">Janeiro</option>
+								<option value="2">Fevereiro</option>
+								<option value="3">Março</option>
+								<option value="4">Abril</option>
+								<option value="5">Maio</option>
+								<option value="6">Junho</option>
+								<option value="7">Julho</option>
+								<option value="8">Agosto</option>
+								<option value="9">Setembro</option>
+								<option value="10">Outubro</option>
+								<option value="11">Novembro</option>
+								<option value="12">Dezembro</option>
+						</select></td>
+						<td><label for="inputAno" class="control-label">Ano</label> <select
+							name='edAno' id="edAno" class="form-control">
+						</select></td>
+					</tr>
+					<tr>
+						<td><label for="inputCaptcha" class="control-label">Confirmação de
+								segurança</label><br /> <input type="text" name="palavra"
+							value="" class="form-control"
+							placeholder="Texto da imagem abaixo" autocomplete="off" /> <img
+							id="captcha" src="securimage/securimage_show.php" alt="CAPTCHA" />
+						</td>
+						<td colspan="4" align="center"><input type="submit"
+							value="Download" class="btn btn-primary btnestilo" /></td>
+					</tr>
+				</table>
+			</form>
+		</div>
+		<div class="alert alert-danger alert-dismissible hide" id='postError'>
+			<a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+			<strong>Erro!</strong> <span></span>
+		</div>
+	</div>
+	<script src="/css/bootstrap.min.js"></script>
+</body>
+
+</html>

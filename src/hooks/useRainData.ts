@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { RainStation } from '../types/rain';
 import { fetchRainData } from '../services/rainApi';
-import { fetchHistoricalRainStationsTimeline } from '../services/gcpHistoricalRainApi';
+import { fetchCemadenLocalHistoricalTimeline } from '../services/cemadenLocalHistoricalApi';
 import { MOCK_RAIN_STATIONS } from '../data/mockRainStations';
 
 export interface UseRainDataOptions {
@@ -22,7 +22,7 @@ export interface UseRainDataOptions {
   refreshInterval?: number;
 }
 
-export type RainDataSource = 'api' | 'gcp' | 'mock';
+export type RainDataSource = 'api' | 'gcp' | 'mock' | 'local';
 export type RainDataMode = 'auto' | 'historical';
 
 export const useRainData = (
@@ -101,7 +101,7 @@ export const useRainData = (
       }
 
       if (mode === 'historical') {
-        const timelineData = await fetchHistoricalRainStationsTimeline(
+        const timelineData = await fetchCemadenLocalHistoricalTimeline(
           {
             dateFrom,
             dateTo,
@@ -115,7 +115,7 @@ export const useRainData = (
         if (!timelineData.stations.length) {
           throw new Error(
             dateFrom === dateTo
-              ? `Sem dados históricos para ${dateFrom}`
+              ? `Sem dados históricos para ${dateFrom}. Confira os CSV em public/data/cemaden/ (2026-01/02/03).`
               : `Sem dados históricos para o período ${dateFrom} a ${dateTo}`
           );
         }
@@ -125,7 +125,7 @@ export const useRainData = (
         setLastUpdate(getLatestReadAt(timelineData.stations) ?? new Date());
         setApiAvailable(false);
         setHistoricalAvailable(true);
-        setDataSource('gcp');
+        setDataSource('local');
         setHistoricalTimeline(timelineData.timeline);
         setActiveHistoricalTimestamp(timelineData.selectedTimestamp);
         setStationsByTimestamp(timelineData.stationsByTimestamp ?? {});
@@ -137,7 +137,7 @@ export const useRainData = (
 
       if (data.length === 0) {
         setHistoricalAvailable(false);
-        throw new Error('Nenhuma estação encontrada. Verifique a API INMET ou use o modo histórico (GCP).');
+        throw new Error('Nenhuma estação encontrada. Verifique a API INMET ou o modo histórico (CSV CEMADEN).');
       }
 
       setStations(data);

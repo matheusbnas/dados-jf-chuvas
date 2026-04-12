@@ -50,9 +50,8 @@ function getZoneRings(feature: ZonaPluvFeature): [number, number][][] {
 }
 
 /**
- * Camada de área de abrangência usando exatamente os polígonos do zonas-pluviometricas.geojson.
- * Cada zona é pintada com o nível de chuva da estação correspondente (match por properties.est).
- * Contorno azul bem visível para delimitar as 33 zonas.
+ * Camada de área de abrangência usando os polígonos do zonas-pluviometricas.geojson.
+ * Com um único polígono (município), não há preenchimento sólido — só contorno por nível, para não tapar o mapa-base.
  */
 export const ZoneRainLayer: React.FC<ZoneRainLayerProps> = ({
   zonasData,
@@ -67,6 +66,9 @@ export const ZoneRainLayer: React.FC<ZoneRainLayerProps> = ({
     const base = getHexOverlayTuning(mapType, 8);
     return { ...base, strokeColor: '#ffffff', strokeOpacity: 1 };
   }, [mapType, showInfluenceLines]);
+
+  /** Um único polígono “município inteiro” preenchia JF com cinza/azul e tapava o mapa-base (tempo real e histórico). */
+  const isSingleMunicipalEnvelope = zonasData.features.length === 1;
 
   const items = useMemo(() => {
     const result: { key: string; positions: [number, number][][]; level: InfluenceLevelValue; name: string; est?: string }[] = [];
@@ -100,23 +102,30 @@ export const ZoneRainLayer: React.FC<ZoneRainLayerProps> = ({
 
   if (!items.length) return null;
 
-  const fillOpacity = 1; // Cor totalmente profunda, sem opacidade
-
   return (
     <>
       {items.map(({ key, positions, level, name, est }) => {
         const fillColor = getInfluenceColor(level, mapType);
+        const pathOptions = isSingleMunicipalEnvelope
+          ? {
+              fillColor,
+              fillOpacity: 0,
+              color: showInfluenceLines ? fillColor : '#64748b',
+              weight: showInfluenceLines ? 2.4 : 1,
+              opacity: showInfluenceLines ? 0.92 : 0.45,
+            }
+          : {
+              color: showInfluenceLines ? '#ffffff' : 'transparent',
+              weight: zoneStroke.weight,
+              opacity: zoneStroke.strokeOpacity,
+              fillColor,
+              fillOpacity: 1,
+            };
         return (
         <Polygon
           key={key}
           positions={positions}
-          pathOptions={{
-            color: showInfluenceLines ? '#ffffff' : 'transparent',
-            weight: zoneStroke.weight,
-            opacity: zoneStroke.strokeOpacity,
-            fillColor,
-            fillOpacity,
-          }}
+          pathOptions={pathOptions}
         >
           <Popup>
             <div style={{ padding: '8px', fontFamily: 'Arial, sans-serif' }}>

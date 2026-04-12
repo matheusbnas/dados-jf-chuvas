@@ -16,6 +16,9 @@ import { filterOccurrencesByRange, filterOccurrencesByText } from './utils/occur
 import { fetchOccurrencesForMap } from './services/ocorrenciasApi';
 import { fetchOcorrenciasAbertas } from './services/ocorrenciasAbertasApi';
 
+/** Quando false, ocorrências e pedidos associados ficam desligados (só chuva + histórico CEMADEN). */
+const ENABLE_OCCURRENCE_UI = false;
+
 function App() {
   const [useMockDemo, setUseMockDemo] = useState(false);
   const [dataMode, setDataMode] = useState<RainDataMode>('auto');
@@ -36,7 +39,9 @@ function App() {
   // --- Playback state ---
   const [isPlaying, setIsPlaying] = useState(false);
   const [playingIndex, setPlayingIndex] = useState(0);
-  const [playbackMode, setPlaybackMode] = useState<'rain' | 'occurrences' | 'both'>('both');
+  const [playbackMode, setPlaybackMode] = useState<'rain' | 'occurrences' | 'both'>(() =>
+    ENABLE_OCCURRENCE_UI ? 'both' : 'rain'
+  );
   const [playbackSpeed, setPlaybackSpeed] = useState(1000); // ms per step
 
   const [sortField, setSortField] = useState<SortField>('h01');
@@ -148,6 +153,11 @@ function App() {
     return () => clearInterval(iv);
   }, [isPlaying, playbackSpeed, historicalTimeline.length]);
 
+  useEffect(() => {
+    if (ENABLE_OCCURRENCE_UI) return;
+    setPlaybackMode('rain');
+  }, [ENABLE_OCCURRENCE_UI]);
+
   // Sincronizar timestamp com a posição da linha do tempo: ao mudar o quadro (slider ou reprodução),
   // atualizar historicalTimestamp para que o mapa e a tabela (incl. Acum. no período) acompanhem o frame atual.
   useEffect(() => {
@@ -188,7 +198,9 @@ function App() {
   const sourceLabel = useMockDemo
     ? 'Demonstração'
     : isHistoricalMode
-      ? 'Histórico (GCP / BigQuery)'
+      ? dataSource === 'local'
+        ? 'CEMADEN 2026 (CSV)'
+        : 'Histórico (GCP / BigQuery)'
       : dataSource === 'gcp'
         ? 'Histórico (GCP)'
         : 'INMET — estação automática A83692 (Juiz de Fora)';
@@ -221,7 +233,7 @@ function App() {
       })()
     : null;
 
-  // Ao receber nova timeline após Aplicar no Instantâneo: definir timestamp pelo horário desejado e atualizar mapa/tabela com dados do GCP
+  // Ao receber nova timeline após Aplicar no Instantâneo: definir timestamp pelo horário desejado e atualizar mapa/tabela
   useEffect(() => {
     if (historicalViewMode !== 'instant' || historicalTimeline.length === 0 || pendingApplyTimeRef.current === null) return;
     const time = pendingApplyTimeRef.current;
@@ -247,8 +259,8 @@ function App() {
     setAppliedOccTimeTo(historicalTimeTo);
     setAppliedOccTextFilter(pendingOccTextFilter);
     setAppliedOccCategoryFilter(pendingOccCategoryFilter);
-    setAppliedShowOccurrences(pendingShowOccurrences);
-    if (pendingShowOccurrences && !isHistoricalMode) {
+    setAppliedShowOccurrences(ENABLE_OCCURRENCE_UI && pendingShowOccurrences);
+    if (ENABLE_OCCURRENCE_UI && pendingShowOccurrences && !isHistoricalMode) {
       setAbertasOccurrencesError(null);
       setAbertasOccurrencesLoading(true);
       fetchOcorrenciasAbertas()
@@ -259,7 +271,7 @@ function App() {
         })
         .finally(() => setAbertasOccurrencesLoading(false));
     }
-    if (pendingShowOccurrences && isHistoricalMode && occurrenceDataSource === 'api') {
+    if (ENABLE_OCCURRENCE_UI && pendingShowOccurrences && isHistoricalMode && occurrenceDataSource === 'api') {
       setApiOccurrencesError(null);
       setApiOccurrencesLoading(true);
       const dateFrom = isHistoricalMode ? historicalDate : today;
@@ -274,7 +286,7 @@ function App() {
           setApiOccurrences(null);
           setApiOccurrencesLoading(false);
         });
-    } else if (!pendingShowOccurrences) {
+    } else if (!ENABLE_OCCURRENCE_UI || !pendingShowOccurrences) {
       setApiOccurrences(null);
     }
     refresh();
@@ -355,7 +367,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (occurrenceDataSource !== 'planilha') return;
+    if (!ENABLE_OCCURRENCE_UI || occurrenceDataSource !== 'planilha') return;
     setPlanilhaLoadError(null);
     loadStaticOccurrences()
       .then(setStaticOccurrences)
@@ -367,7 +379,7 @@ function App() {
   }, [occurrenceDataSource]);
 
   useEffect(() => {
-    if (isHistoricalMode || !appliedShowOccurrences) return;
+    if (!ENABLE_OCCURRENCE_UI || isHistoricalMode || !appliedShowOccurrences) return;
     setAbertasOccurrencesError(null);
     setAbertasOccurrencesLoading(true);
     fetchOcorrenciasAbertas()
@@ -416,7 +428,7 @@ function App() {
 
   // Ocorrências na linha do tempo: começar zerado (quadro 0 = nenhuma) e ir preenchendo conforme o tempo avança
   const occurrencesForPlayback = useMemo(() => {
-    if (playbackMode === 'rain') return [];
+    if (!ENABLE_OCCURRENCE_UI || playbackMode === 'rain') return [];
     const isHistoricalWithTimeline = isHistoricalMode && historicalTimeline.length > 0;
     if (!isHistoricalWithTimeline) return filteredOccurrences;
     // No primeiro quadro (início do período): nenhuma ocorrência, mapa "zerado"
@@ -466,11 +478,23 @@ function App() {
           onHistoricalViewModeChange={setHistoricalViewMode}
           onApplyHistoricalFilter={handleApplyHistorical}
           historicalRefreshing={refreshing}
-          occurrenceLoading={(!isHistoricalMode && abertasOccurrencesLoading) || (isHistoricalMode && occurrenceDataSource === 'api' && apiOccurrencesLoading)}
-          occurrenceError={!isHistoricalMode ? abertasOccurrencesError : (occurrenceDataSource === 'api' ? apiOccurrencesError : null)}
-          occurrences={occurrencesForPlayback}
-          showOccurrences={pendingShowOccurrences}
-          onShowOccurrencesChange={setPendingShowOccurrences}
+          occurrenceLoading={
+            ENABLE_OCCURRENCE_UI &&
+            ((!isHistoricalMode && abertasOccurrencesLoading) ||
+              (isHistoricalMode && occurrenceDataSource === 'api' && apiOccurrencesLoading))
+          }
+          occurrenceError={
+            ENABLE_OCCURRENCE_UI
+              ? !isHistoricalMode
+                ? abertasOccurrencesError
+                : occurrenceDataSource === 'api'
+                  ? apiOccurrencesError
+                  : null
+              : null
+          }
+          occurrences={ENABLE_OCCURRENCE_UI ? occurrencesForPlayback : []}
+          showOccurrences={ENABLE_OCCURRENCE_UI ? pendingShowOccurrences : false}
+          onShowOccurrencesChange={ENABLE_OCCURRENCE_UI ? setPendingShowOccurrences : () => {}}
           occurrenceDataSource={occurrenceDataSource}
           onOccurrenceDataSourceChange={setOccurrenceDataSource}
           planilhaLoadError={planilhaLoadError}
@@ -480,7 +504,9 @@ function App() {
           planilhaUploadError={planilhaUploadError}
           planilhaGeocoding={planilhaGeocoding}
           planilhaGeocodeProgress={planilhaGeocodeProgress}
-          appliedShowOccurrences={appliedShowOccurrences || (isPlaying && playbackMode !== 'rain')}
+          appliedShowOccurrences={
+            ENABLE_OCCURRENCE_UI && (appliedShowOccurrences || (isPlaying && playbackMode !== 'rain'))
+          }
           occurrenceTextFilter={pendingOccTextFilter}
           onOccurrenceTextFilterChange={setPendingOccTextFilter}
           occurrenceCategoryFilter={pendingOccCategoryFilter}
@@ -500,6 +526,8 @@ function App() {
             setSortField(field);
             setSortDirection(direction);
           }}
+          hideOccurrenceControls={!ENABLE_OCCURRENCE_UI}
+          hidePlaybackOccurrenceModes={!ENABLE_OCCURRENCE_UI}
         />
 
 
@@ -517,7 +545,9 @@ function App() {
                     <span
                       className={
                         isHistoricalMode
-                          ? headerFallbackClass
+                          ? dataSource === 'local'
+                            ? headerFallbackClass
+                            : headerFallbackClass
                           : apiAvailable
                             ? headerOnlineClass
                             : dataSource === 'gcp'
@@ -526,7 +556,9 @@ function App() {
                       }
                     >
                       {isHistoricalMode
-                        ? 'Modo histórico (GCP)'
+                        ? dataSource === 'local'
+                          ? 'Modo histórico (CEMADEN)'
+                          : 'Modo histórico (GCP)'
                         : apiAvailable
                           ? 'API online'
                           : dataSource === 'gcp'
@@ -563,7 +595,11 @@ function App() {
                     setHistoricalTimestamp(null);
                   }}
                   className={`inline-flex items-center gap-1.5 sm:gap-2 rounded-lg px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium transition-colors shrink-0 ${headerButtonHistoricalClass}`}
-                  title={isHistoricalMode ? 'Voltar para tempo real/fallback automático' : 'Ativar filtro temporal histórico (GCP)'}
+                  title={
+                    isHistoricalMode
+                      ? 'Voltar para tempo real/fallback automático'
+                      : 'Ativar filtro temporal histórico (CEMADEN 2026, CSV local)'
+                  }
                 >
                   {isHistoricalMode ? 'Tempo real' : 'Histórico'}
                 </button>
@@ -628,7 +664,7 @@ function App() {
 
                 <div className="space-y-1">
                   <p>• <strong>Níveis de chuva:</strong> mesma paleta (cinza, azuis) para 15min, 1h e acumulado nas zonas e bolinhas.</p>
-                  <p>• <strong>Modo Histórico (GCP):</strong> em <strong>Instantâneo</strong> use uma data e o horário para análise; em <strong>Acumulado no período</strong> aparecem <strong>De</strong> e <strong>Até</strong> para o intervalo (ex.: 09/02/2026 até 10/02/2026).</p>
+                  <p>• <strong>Modo histórico (CEMADEN):</strong> em <strong>Instantâneo</strong> use uma data e o horário para análise; em <strong>Acumulado no período</strong> aparecem <strong>De</strong> e <strong>Até</strong> para o intervalo (ex.: 09/02/2026 até 10/02/2026).</p>
                 </div>
 
                 <div className="space-y-1">
@@ -680,8 +716,8 @@ function App() {
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-3 py-5 text-xs sm:px-4 sm:py-6 sm:text-sm lg:px-6">
           <p className="font-semibold text-slate-100">Juiz de Fora – MG | Dados meteorológicos INMET</p>
           <p className="text-slate-300">
-            Chuva e variáveis da estação automática A83692 (Instituto Nacional de Meteorologia). Histórico agregado, quando
-            usado, via BigQuery (GCP).
+            Chuva e variáveis da estação automática A83692 (Instituto Nacional de Meteorologia). Modo histórico: exportações
+            CSV do CEMADEN (jan.–mar./2026) servidas localmente.
           </p>
         </div>
       </footer>
