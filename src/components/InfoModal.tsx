@@ -177,13 +177,28 @@ export const InfoModal: React.FC<InfoModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end p-4 sm:p-6 border-t border-gray-200 relative z-[10001]">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-          >
-            Fechar
-          </button>
+        <div className="flex flex-col gap-3 p-4 sm:p-6 border-t border-gray-200 relative z-[10001]">
+          <p className="text-[11px] sm:text-xs text-gray-600 leading-snug">
+            Iniciativa de bens públicos para adaptação e resiliência climática. Materiais
+            deste projeto:{' '}
+            <a
+              href="https://creativecommons.org/licenses/by/4.0/deed.pt"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 underline font-medium"
+            >
+              CC BY 4.0
+            </a>
+            {' '}(atribuição).
+          </p>
+          <div className="flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Fechar
+            </button>
+          </div>
         </div>
       </div>
     </div>

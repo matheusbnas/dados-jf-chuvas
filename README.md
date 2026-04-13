@@ -112,6 +112,17 @@ docs/             # GCP_SETUP.md
 
 ## Licenças e fontes
 
+### Licença do projeto (iniciativa / bens públicos)
+
+Esta iniciativa pretende construir bens públicos para viabilizar a adaptação e o
+aumento da resiliência climática em territórios vulneráveis à mudança climática.
+Por isso, os materiais produzidos, apresentados ou entregues no âmbito desta
+iniciativa são disponibilizados sob a licença **Creative Commons Atribuição 4.0
+Internacional (CC BY 4.0)**. Ver o ficheiro [LICENSE](./LICENSE) e o texto legal em
+[creativecommons.org/licenses/by/4.0](https://creativecommons.org/licenses/by/4.0/).
+
+### Fontes de dados e conteúdos de terceiros
+
 - **OpenStreetMap** — dados de bairros (ODbL); atribuição nos tiles do Leaflet.
 - **CEMADEN / exportações** — uso conforme termos da fonte.
 - **Áreas de risco** — mapeamento institucional (SSPDC/PJF); camada derivada de KML/My Maps para visualização cruzada com chuva.
