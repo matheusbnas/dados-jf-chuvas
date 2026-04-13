@@ -46,7 +46,9 @@ npm run preview   # testa a pasta dist
 | `data/zonas-pluviometricas.geojson` | Perímetro de referência municipal / zona pluviométrica (base para recorte Voronoi). |
 | `public/data/areas-risco-jf.geojson` | Polígonos de risco (gerado a partir do KML; ver script abaixo). |
 
-No **modo Histórico**, use **Importar CSV** no painel do mapa para registar meses sem ficheiro no repositório; para partilhar em equipa ou produção, adicione o `.csv` em `public/data/cemaden/` e faça deploy (ou, no futuro, base de dados / job automático).
+No **modo Histórico**, use **Importar CSV** no painel do mapa para registar meses sem ficheiro no repositório; para partilhar em equipa ou produção, adicione o `.csv` em `public/data/cemaden/` e faça deploy. Está planeada uma **cadeia em GCP** (CSV → GCS, tabelas BigQuery, pipeline de dados); ver a secção *Visão futura* em [docs/GCP_SETUP.md](./docs/GCP_SETUP.md#pipeline-gcp).
+
+Novos CSV mensais: no [Mapa Interativo do CEMADEN](https://mapainterativo.cemaden.gov.br/#), menu **Download de Dados** → **Estações pluviométricas** — preencha **UF**, **município**, **mês**, **ano** e o captcha antes de fazer o download.
 
 ## Variáveis de ambiente
 
@@ -54,6 +56,7 @@ Copie `.env.example` para `.env` e ajuste.
 
 | Variável | Uso |
 |----------|-----|
+| `VITE_INMET_REALTIME_OPERATIONAL` | Defina `true` quando o proxy INMET estiver operacional no deploy; por omissão o UI indica tempo real em desenvolvimento e não chama a API. |
 | `VITE_OCORRENCIAS_*` | Se o módulo de ocorrências estiver ativo: API ou planilha em `public/planilhas/`. |
 | `VITE_GEOCODE_OCORRENCIAS` | `false` para desativar geocoding de ocorrências. |
 | `VITE_GOOGLE_MAPS_API_KEY` | Opcional; o mapa principal é **Leaflet**. |
@@ -107,7 +110,7 @@ docs/             # GCP_SETUP.md
 
 ## Documentação adicional
 
-- [docs/GCP_SETUP.md](./docs/GCP_SETUP.md) — BigQuery / credenciais para a função de histórico GCP (opcional face ao CSV local).
+- [docs/GCP_SETUP.md](./docs/GCP_SETUP.md) — BigQuery / credenciais para a função de histórico (opcional), mais visão do pipeline futuro (GCS, tabelas, engenharia de dados).
 - [docs/GOOGLE_MAPS_SETUP.md](./docs/GOOGLE_MAPS_SETUP.md) — Google Maps (opcional).
 
 ## Licenças e fontes

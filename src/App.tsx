@@ -15,6 +15,20 @@ import { enrichOccurrencesMissingCoords } from './utils/enrichOccurrencesGeocode
 import { filterOccurrencesByRange, filterOccurrencesByText } from './utils/occurrenceFilter';
 import { fetchOccurrencesForMap } from './services/ocorrenciasApi';
 import { fetchOcorrenciasAbertas } from './services/ocorrenciasAbertasApi';
+import {
+  INMET_REALTIME_OPERATIONAL,
+  CEMADEN_BUNDLED_MONTHS_LABEL_PT,
+  CEMADEN_PORTAL_URL,
+  CEMADEN_CSV_HOWTO_SHORT_PT,
+} from './config/dataAvailability';
+
+const historicalDataStripClass = (highContrast: boolean) =>
+  highContrast
+    ? 'border-t border-white/20 bg-slate-950/55 text-gray-100'
+    : 'border-t border-gray-200/90 bg-gray-50/95 text-gray-800';
+
+const historicalDataLinkClass = (highContrast: boolean) =>
+  highContrast ? 'text-amber-200 underline underline-offset-2 font-semibold hover:text-amber-100' : 'text-blue-700 underline underline-offset-2 font-semibold hover:text-blue-800';
 
 /** Quando false, ocorrências e pedidos associados ficam desligados (só chuva + histórico CEMADEN). */
 const ENABLE_OCCURRENCE_UI = false;
@@ -198,12 +212,8 @@ function App() {
   const sourceLabel = useMockDemo
     ? 'Demonstração'
     : isHistoricalMode
-      ? dataSource === 'local'
-        ? 'CEMADEN (CSV)'
-        : 'Histórico (GCP / BigQuery)'
-      : dataSource === 'gcp'
-        ? 'Histórico (GCP)'
-        : 'INMET — estação automática A83692 (Juiz de Fora)';
+      ? 'Histórico (CSV CEMADEN)'
+      : 'INMET — estação automática A83692 (Juiz de Fora)';
   const titleLabel = isHistoricalMode ? 'Como estava a chuva no horário selecionado?' : 'Onde está chovendo agora?';
 
   const selectedMoment =
@@ -219,6 +229,9 @@ function App() {
 
   const realtimeApiDiagnostic = !useMockDemo && !isHistoricalMode
     ? (() => {
+        if (!INMET_REALTIME_OPERATIONAL) {
+          return 'Chuva em tempo real (INMET): integração ainda não operacional neste site. Use o modo Histórico (CSV CEMADEN) ou «Exemplo» para explorar o mapa.';
+        }
         if (refreshing) return 'Atualizando dados da API...';
         if (apiDataUnchangedSince && lastUpdate) {
           return `API sem nova atualização desde ${lastUpdate.toLocaleTimeString('pt-BR')} (checagem a cada 5 min).`;
@@ -448,7 +461,7 @@ function App() {
     <div className="min-h-screen w-screen bg-gray-900 overflow-x-hidden">
       <div className="relative h-screen w-full overflow-hidden">
         <LeafletMap
-          headerErrorVisible={!!error && !useMockDemo}
+          headerOverlayTall={(!useMockDemo && !!error) || (isHistoricalMode && !useMockDemo)}
           stations={stations}
           mapType={mapType}
           onMapTypeChange={setMapType}
@@ -534,9 +547,9 @@ function App() {
 
 
         <div className="absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-3 z-[2000] pointer-events-none">
-          <div className={`pointer-events-auto mx-auto max-w-6xl rounded-xl sm:rounded-2xl border backdrop-blur shadow-lg px-2.5 py-2 sm:px-4 sm:py-3 overflow-hidden ${headerPanelClass}`}>
-            <div className="flex flex-col gap-2 sm:gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="min-w-0 flex-shrink-0">
+          <div className={`pointer-events-auto mx-auto max-w-6xl flex flex-col rounded-xl sm:rounded-2xl border backdrop-blur shadow-lg overflow-visible ${headerPanelClass}`}>
+            <div className="flex flex-col gap-2 sm:gap-3 xl:flex-row xl:items-start xl:justify-between xl:gap-4 px-2.5 py-2 sm:px-4 sm:py-3 min-w-0 w-full">
+              <div className="min-w-0 flex-1">
                 <h1 className={`text-xs sm:text-base lg:text-lg font-bold leading-tight ${headerTitleClass}`}>{titleLabel}</h1>
                 <div className={`mt-0.5 sm:mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] sm:text-xs ${headerMetaClass}`}>
                   {selectedMoment && <span>Momento dos dados: {selectedMoment}</span>}
@@ -547,24 +560,18 @@ function App() {
                     <span
                       className={
                         isHistoricalMode
-                          ? dataSource === 'local'
-                            ? headerFallbackClass
-                            : headerFallbackClass
+                          ? headerFallbackClass
                           : apiAvailable
                             ? headerOnlineClass
-                            : dataSource === 'gcp'
-                              ? headerFallbackClass
-                              : headerOfflineClass
+                            : headerOfflineClass
                       }
                     >
                       {isHistoricalMode
-                        ? dataSource === 'local'
-                          ? 'Modo histórico (CEMADEN)'
-                          : 'Modo histórico (GCP)'
-                        : apiAvailable
-                          ? 'API online'
-                          : dataSource === 'gcp'
-                            ? 'API offline (fallback GCP)'
+                        ? 'Modo histórico (CSV)'
+                        : !INMET_REALTIME_OPERATIONAL
+                          ? 'Tempo real em desenvolvimento'
+                          : apiAvailable
+                            ? 'API online'
                             : 'API offline'}
                     </span>
                   )}
@@ -572,7 +579,15 @@ function App() {
                 </div>
                 {realtimeApiDiagnostic && (
                   <p
-                    className={`mt-1 text-[10px] sm:text-xs ${isHighContrastMap ? 'text-sky-200' : 'text-sky-700'}`}
+                    className={`mt-1.5 text-[10px] sm:text-xs font-medium leading-snug break-words ${
+                      !INMET_REALTIME_OPERATIONAL
+                        ? isHighContrastMap
+                          ? 'text-amber-200'
+                          : 'text-amber-900'
+                        : isHighContrastMap
+                          ? 'text-sky-200'
+                          : 'text-sky-700'
+                    }`}
                     title={realtimeApiDiagnostic}
                   >
                     {realtimeApiDiagnostic}
@@ -580,7 +595,7 @@ function App() {
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 shrink-0 min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 shrink-0 min-w-0 xl:justify-end xl:max-w-[min(100%,28rem)]">
                 <button
                   type="button"
                   onClick={() => setUseMockDemo((v) => !v)}
@@ -625,6 +640,30 @@ function App() {
                 </button>
               </div>
             </div>
+
+            {isHistoricalMode && !useMockDemo && (
+              <div
+                className={`px-2.5 pb-2.5 pt-2 sm:px-4 sm:pb-3 sm:pt-2.5 ${historicalDataStripClass(isHighContrastMap)} rounded-b-xl sm:rounded-b-2xl`}
+              >
+                <p className="text-[11px] sm:text-sm leading-relaxed">
+                  <span className="font-semibold opacity-95">Dados embutidos no site:</span> apenas{' '}
+                  <strong>{CEMADEN_BUNDLED_MONTHS_LABEL_PT}</strong>. Para outros meses,{' '}
+                  <a
+                    href={CEMADEN_PORTAL_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={historicalDataLinkClass(isHighContrastMap)}
+                    title={CEMADEN_CSV_HOWTO_SHORT_PT}
+                  >
+                    descarregue o CSV no Mapa Interativo do CEMADEN
+                  </a>{' '}
+                  (menu <strong className="font-medium">Download de Dados</strong> → <strong className="font-medium">Estações pluviométricas</strong> —{' '}
+                  <strong className="font-medium">preencha UF, município, mês e ano</strong> e o captcha antes de descarregar) e use{' '}
+                  <strong>Importar CSV</strong> no painel do mapa. Em deploy, pode também acrescentar ficheiros em{' '}
+                  <code className={`rounded px-1 py-0.5 text-[10px] ${isHighContrastMap ? 'bg-white/10' : 'bg-gray-200/90'}`}>public/data/cemaden/</code>.
+                </p>
+              </div>
+            )}
           </div>
 
           {error && !useMockDemo && (

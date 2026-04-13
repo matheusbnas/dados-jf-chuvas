@@ -3,6 +3,7 @@ import { RainStation } from '../types/rain';
 import { fetchRainData } from '../services/rainApi';
 import { fetchCemadenLocalHistoricalTimeline } from '../services/cemadenLocalHistoricalApi';
 import { MOCK_RAIN_STATIONS } from '../data/mockRainStations';
+import { INMET_REALTIME_OPERATIONAL } from '../config/dataAvailability';
 
 export interface UseRainDataOptions {
   /** Usar dados de exemplo (mock) para validar mapa de influência antes do GCP */
@@ -100,6 +101,21 @@ export const useRainData = (
         return;
       }
 
+      if (mode === 'auto' && !INMET_REALTIME_OPERATIONAL) {
+        setStations([]);
+        setTotalStations(0);
+        setLastUpdate(null);
+        setApiAvailable(false);
+        setHistoricalAvailable(false);
+        setDataSource('api');
+        setHistoricalTimeline([]);
+        setActiveHistoricalTimestamp(null);
+        setStationsByTimestamp({});
+        setApiDataUnchangedSince(null);
+        hasLoadedRef.current = true;
+        return;
+      }
+
       if (mode === 'historical') {
         const timelineData = await fetchCemadenLocalHistoricalTimeline(
           {
@@ -193,6 +209,7 @@ export const useRainData = (
       setHistoricalTimeline([]);
       setActiveHistoricalTimestamp(null);
       setStationsByTimestamp({});
+      setDataSource('local');
       return;
     }
     loadDataRef.current();

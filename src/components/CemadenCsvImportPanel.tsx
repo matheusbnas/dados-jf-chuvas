@@ -12,6 +12,11 @@ import {
   parseCemadenCsv,
   clearCemadenLocalCache,
 } from '../services/cemadenLocalHistoricalApi';
+import {
+  CEMADEN_BUNDLED_MONTHS_LABEL_PT,
+  CEMADEN_PORTAL_URL,
+  CEMADEN_CSV_HOWTO_SHORT_PT,
+} from '../config/dataAvailability';
 
 const controlBoxClass = 'bg-white/95 backdrop-blur rounded-lg shadow-md border border-gray-200 p-2 min-w-0 shrink-0';
 
@@ -153,9 +158,14 @@ export const CemadenCsvImportPanel: React.FC<CemadenCsvImportPanelProps> = ({ on
         <Database className="w-3.5 h-3.5 shrink-0" />
         CSV CEMADEN (importar)
       </div>
-      <p className="text-[10px] text-gray-500 mb-2 leading-snug">
-        Importe exportações mensais em falta; ficam guardadas neste navegador até apagar. No deploy, acrescente ficheiros em{' '}
-        <code className="text-[9px] bg-gray-100 px-0.5 rounded">public/data/cemaden/</code> ou use base de dados no futuro.
+      <p className="text-[10px] text-gray-600 mb-2 leading-snug">
+        <strong className="text-gray-800">Dados já incluídos no site:</strong> em geral apenas{' '}
+        <strong>{CEMADEN_BUNDLED_MONTHS_LABEL_PT}</strong>. Para outros meses, obtenha o CSV no{' '}
+        <a className="text-blue-700 underline font-medium" href={CEMADEN_PORTAL_URL} target="_blank" rel="noopener noreferrer">
+          Mapa Interativo do CEMADEN
+        </a>{' '}
+        ({CEMADEN_CSV_HOWTO_SHORT_PT}) e importe abaixo. Os ficheiros ficam neste navegador até apagar. Em produção, pode também
+        acrescentar CSV em <code className="text-[9px] bg-gray-100 px-0.5 rounded">public/data/cemaden/</code>.
       </p>
 
       <input ref={inputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleInputChange} />

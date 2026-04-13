@@ -1,6 +1,19 @@
 # Configuração GCP (BigQuery) – Dados históricos de chuvas
 
-Este projeto usa uma **Netlify Function** para consultar dados históricos de chuvas no **Google BigQuery**, usando o arquivo de credenciais (service account) do GCP. No frontend, o **modo Histórico** permite visualizar dados em **Instantâneo** (uma data + horário) ou **Acumulado no período** (intervalo De/Até com mm acumulados por estação).
+Este projeto pode usar uma **Netlify Function** para consultar dados históricos de chuvas no **Google BigQuery**, com credenciais (service account) do GCP. No frontend, o **modo Histórico** na app atual privilegia **CSV CEMADEN** local ou importado; a integração BigQuery abaixo é **opcional** quando já existe tabela alimentada.
+
+<a id="pipeline-gcp"></a>
+
+## Visão futura: pipeline de dados no GCP
+
+Está previsto um processo de **engenharia de dados** em GCP que complementa o fluxo manual de CSV:
+
+- **Coleta** mantendo os dados em **CSV** (exportações CEMADEN ou etapas equivalentes).
+- **Envio automático** dos ficheiros CSV para o **Google Cloud Storage (GCS)**.
+- **Modelagem** no GCP: criação e manutenção de **tabelas** (por exemplo no **BigQuery**) alinhadas ao schema esperado.
+- **Pipeline de dados** de ponta a ponta — orquestração entre ingestão, armazenamento em objeto, transformação/carga e exposição para consumo (incluindo, se fizer sentido, a função de histórico já descrita neste documento).
+
+Até esse pipeline estar operacional, o repositório continua a documentar o caminho **CSV em `public/data/cemaden/`**, **import no navegador** e, para quem já tiver dados no BigQuery, a configuração das variáveis da Netlify Function.
 
 ## 1. Credenciais
 

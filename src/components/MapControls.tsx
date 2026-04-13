@@ -753,7 +753,17 @@ export const HistoricalTimelineControl: React.FC<HistoricalTimelineControlProps>
   );
 };
 
-const BAIRROS_BOUNDS_PROPS: L.FitBoundsOptions = { padding: [24, 24], maxZoom: 12 };
+/** Padding assimétrico quando o cabeçalho cobre o topo: encaixa o município na área visível, não sob o cartão. */
+function bairrosFitBoundsProps(headerOverlayTall: boolean): L.FitBoundsOptions {
+  if (!headerOverlayTall) {
+    return { paddingTopLeft: L.point(24, 24), paddingBottomRight: L.point(24, 24), maxZoom: 12 };
+  }
+  return {
+    paddingTopLeft: L.point(20, 132),
+    paddingBottomRight: L.point(20, 28),
+    maxZoom: 12,
+  };
+}
 
 function boundsFromBairros(bairrosData: { features: Array<{ geometry: { type?: string; coordinates: number[][] | number[][][] | number[][][][] } }> }): L.LatLngBounds | null {
   if (!bairrosData?.features?.length) return null;
@@ -788,40 +798,44 @@ function boundsFromBairros(bairrosData: { features: Array<{ geometry: { type?: s
 interface FitCityOnLoadProps {
   /** Bairros ou zonas pluviométricas para encaixar a vista (preferir zonas quando disponível). */
   boundsData: BoundsGeoJson;
+  headerOverlayTall?: boolean;
 }
 
 /** Ajusta a vista do mapa para o município ao carregar (uma vez). */
-export const FitCityOnLoad: React.FC<FitCityOnLoadProps> = ({ boundsData }) => {
+export const FitCityOnLoad: React.FC<FitCityOnLoadProps> = ({ boundsData, headerOverlayTall = false }) => {
   const map = useMap();
   const done = useRef(false);
   useEffect(() => {
     if (done.current || !boundsData) return;
     const bounds = boundsFromBairros(boundsData);
     if (bounds) {
-      map.fitBounds(bounds, BAIRROS_BOUNDS_PROPS);
+      map.fitBounds(bounds, bairrosFitBoundsProps(headerOverlayTall));
       done.current = true;
     }
-  }, [map, boundsData]);
+  }, [map, boundsData, headerOverlayTall]);
   return null;
 };
 
 interface FocusCityButtonProps {
   boundsData: BoundsGeoJson;
-  /** Quando o cabeçalho mostra faixa de erro, desce o botão para não ficar sob o aviso (z do cabeçalho > do mapa). */
-  headerErrorVisible?: boolean;
+  /**
+   * Quando o cabeçalho ocupa mais altura (erro, faixa histórica, etc.), desce o botão.
+   * O painel do header está em z-2000; o botão fica no mapa — sem offset fica tapado pelo cartão.
+   */
+  headerOverlayTall?: boolean;
 }
 
-export const FocusCityButton: React.FC<FocusCityButtonProps> = ({ boundsData, headerErrorVisible = false }) => {
+export const FocusCityButton: React.FC<FocusCityButtonProps> = ({ boundsData, headerOverlayTall = false }) => {
   const map = useMap();
 
   const handleFocus = () => {
     if (!boundsData) return;
     const bounds = boundsFromBairros(boundsData);
-    if (bounds) map.fitBounds(bounds, BAIRROS_BOUNDS_PROPS);
+    if (bounds) map.fitBounds(bounds, bairrosFitBoundsProps(headerOverlayTall));
   };
 
-  const topClass = headerErrorVisible
-    ? 'top-44 sm:top-48'
+  const topClass = headerOverlayTall
+    ? 'top-44 sm:top-52'
     : 'top-24 sm:top-28';
 
   return (

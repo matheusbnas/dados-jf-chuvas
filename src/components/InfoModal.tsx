@@ -1,7 +1,12 @@
 import React from 'react';
 import { X, Info, MapPin } from 'lucide-react';
 import { RainStation } from '../types/rain';
-import { rainLevels } from '../utils/rainLevel';
+import {
+  INMET_REALTIME_OPERATIONAL,
+  CEMADEN_BUNDLED_MONTHS_LABEL_PT,
+  CEMADEN_PORTAL_URL,
+  CEMADEN_CSV_HOWTO_SHORT_PT,
+} from '../config/dataAvailability';
 
 interface InfoModalProps {
   isOpen: boolean;
@@ -25,11 +30,9 @@ export const InfoModal: React.FC<InfoModalProps> = ({
   const sourceDescription =
     dataSource === 'local'
       ? 'Exportações CSV do CEMADEN (Juiz de Fora): ficheiros em public/data/cemaden/ e/ou importados no painel do mapa (IndexedDB neste navegador)'
-      : dataSource === 'gcp'
-        ? 'Leituras históricas no BigQuery (GCP) via Netlify Function'
-        : dataSource === 'mock'
-          ? 'Dados simulados para demonstração'
-          : 'API pública do INMET (apitempo.inmet.gov.br) — estação automática A83692, Juiz de Fora–MG';
+      : dataSource === 'mock'
+        ? 'Dados simulados para demonstração'
+        : 'API pública do INMET (apitempo.inmet.gov.br) — estação automática A83692, Juiz de Fora–MG';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
@@ -67,7 +70,12 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                 </div>
                 <div className="text-xs text-gray-600 space-y-1">
                   <p>• <strong>Bolinhas coloridas:</strong> Estações meteorológicas ativas</p>
-                  <p>• <strong>Dados em tempo real:</strong> Atualização a cada 5 minutos</p>
+                  <p>
+                    • <strong>Tempo real (INMET):</strong>{' '}
+                    {INMET_REALTIME_OPERATIONAL
+                      ? 'Atualização periódica (ex.: a cada 5 minutos) quando a API estiver operacional.'
+                      : 'Integração em desenvolvimento neste site — use o modo Histórico ou «Exemplo» para ver dados no mapa.'}
+                  </p>
                   <p>• <strong>Interatividade:</strong> Clique nos bairros e estações para detalhes</p>
                   <p>• <strong>Tecnologia:</strong> Leaflet + OpenStreetMap</p>
                 </div>
@@ -108,6 +116,23 @@ export const InfoModal: React.FC<InfoModalProps> = ({
               Sobre os dados
             </h3>
             <div className="space-y-3 text-sm text-gray-600">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                <p className="font-semibold text-amber-900">Disponibilidade</p>
+                <p className="mt-1 leading-snug">
+                  <strong>Histórico CEMADEN:</strong> neste site, dados pré-carregados tipicamente só para{' '}
+                  <strong>{CEMADEN_BUNDLED_MONTHS_LABEL_PT}</strong>. Para outros meses, use o{' '}
+                  <a className="underline font-medium text-amber-900" href={CEMADEN_PORTAL_URL} target="_blank" rel="noopener noreferrer">
+                    Mapa Interativo do CEMADEN
+                  </a>{' '}
+                  — {CEMADEN_CSV_HOWTO_SHORT_PT} Depois use <strong>Importar CSV</strong> no painel do mapa.
+                </p>
+                {!INMET_REALTIME_OPERATIONAL && (
+                  <p className="mt-2 leading-snug border-t border-amber-200/80 pt-2">
+                    <strong>Tempo real INMET:</strong> integração ainda em desenvolvimento neste site — use o modo{' '}
+                    <strong>Histórico</strong> ou <strong>Exemplo</strong> para ver o mapa com dados.
+                  </p>
+                )}
+              </div>
               <div className="flex items-start gap-3">
                 <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
                 <div>
@@ -122,7 +147,11 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                 <div className="w-2 h-2 rounded-full bg-green-500 mt-2 flex-shrink-0"></div>
                 <div>
                   <p className="font-medium text-gray-800">Atualização automática</p>
-                  <p className="text-gray-600">Os dados são atualizados automaticamente a cada 5 minutos</p>
+                  <p className="text-gray-600">
+                    {INMET_REALTIME_OPERATIONAL
+                      ? 'Em modo tempo real, os dados podem ser atualizados automaticamente em intervalos regulares (ex.: 5 minutos).'
+                      : 'A atualização automática em tempo real ficará disponível quando a integração INMET estiver ativa neste site.'}
+                  </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
@@ -161,9 +190,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                       ? 'Conectado'
                       : dataSource === 'local'
                         ? 'N/A (histórico por CSV local)'
-                        : dataSource === 'gcp'
-                          ? 'Indisponível (dados GCP ativos)'
-                          : 'Desconectado'}
+                        : 'Desconectado'}
                   </span>
                 </div>
                 {totalStations > 0 && (

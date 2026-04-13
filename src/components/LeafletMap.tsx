@@ -124,8 +124,8 @@ interface LeafletMapProps {
   hidePlaybackOccurrenceModes?: boolean;
   /** Após importar CSV CEMADEN (IndexedDB), recarrega dados históricos. */
   onCemadenImportsChanged?: () => void;
-  /** Cabeçalho está a mostrar erro de dados — o botão «Ver cidade inteira» desce para não ser tapado. */
-  headerErrorVisible?: boolean;
+  /** Cabeçalho alto (erro ou faixa histórica) — desce o botão «Ver cidade inteira» para não ficar sob o cartão (z-2000). */
+  headerOverlayTall?: boolean;
 }
 
 function bairroStrokeColor(nome: string): string {
@@ -412,7 +412,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   hideOccurrenceControls = false,
   hidePlaybackOccurrenceModes = false,
   onCemadenImportsChanged,
-  headerErrorVisible = false,
+  headerOverlayTall = false,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const { bairrosData, loading, error } = useBairrosData();
@@ -830,8 +830,8 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
           attribution={mapTypeConfig.attribution}
           url={mapTypeConfig.url}
         />
-        <FitCityOnLoad boundsData={boundsData} />
-        <FocusCityButton boundsData={boundsData} headerErrorVisible={headerErrorVisible} />
+        <FitCityOnLoad boundsData={boundsData} headerOverlayTall={headerOverlayTall} />
+        <FocusCityButton boundsData={boundsData} headerOverlayTall={headerOverlayTall} />
         {zonasData &&
           (displayStations.length >= 2 ? (
             <PluviometerVoronoiLayer
