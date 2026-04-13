@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { RainStation } from '../types/rain';
 import { fetchRainData } from '../services/rainApi';
 import { fetchCemadenLocalHistoricalTimeline } from '../services/cemadenLocalHistoricalApi';
-import { MOCK_RAIN_STATIONS } from '../data/mockRainStations';
+import { MOCK_RAIN_STATIONS, getMockHistoricalTimelineDemo } from '../data/mockRainStations';
 import { INMET_REALTIME_OPERATIONAL } from '../config/dataAvailability';
 
 export interface UseRainDataOptions {
@@ -87,7 +87,7 @@ export const useRainData = (
       }
       setError(null);
 
-      if (useMock) {
+      if (useMock && mode === 'auto') {
         setStations(MOCK_RAIN_STATIONS);
         setTotalStations(MOCK_RAIN_STATIONS.length);
         setLastUpdate(getLatestReadAt(MOCK_RAIN_STATIONS) ?? new Date());
@@ -97,6 +97,35 @@ export const useRainData = (
         setHistoricalTimeline([]);
         setActiveHistoricalTimestamp(null);
         setStationsByTimestamp({});
+        hasLoadedRef.current = true;
+        return;
+      }
+
+      if (useMock && mode === 'historical') {
+        const timelineData = getMockHistoricalTimelineDemo({
+          dateFrom,
+          dateTo,
+          timeFrom: historicalTimeFrom,
+          timeTo: historicalTimeTo,
+        });
+
+        if (!timelineData.stations.length) {
+          throw new Error(
+            dateFrom === dateTo
+              ? `Sem dados de demonstração para ${dateFrom}. Ajuste o intervalo (De / Até e horários) e tente de novo.`
+              : `Sem dados de demonstração para o período ${dateFrom} a ${dateTo}`
+          );
+        }
+
+        setStations(timelineData.stations);
+        setTotalStations(timelineData.stations.length);
+        setLastUpdate(getLatestReadAt(timelineData.stations) ?? new Date());
+        setApiAvailable(false);
+        setHistoricalAvailable(true);
+        setDataSource('mock');
+        setHistoricalTimeline(timelineData.timeline);
+        setActiveHistoricalTimestamp(timelineData.selectedTimestamp);
+        setStationsByTimestamp(timelineData.stationsByTimestamp ?? {});
         hasLoadedRef.current = true;
         return;
       }
@@ -197,6 +226,15 @@ export const useRainData = (
   }, []);
 
   useEffect(() => {
+    if (useMock && mode === 'historical') {
+      setLoading(false);
+      setStations([]);
+      setHistoricalTimeline([]);
+      setActiveHistoricalTimestamp(null);
+      setStationsByTimestamp({});
+      setDataSource('mock');
+      return;
+    }
     if (useMock) {
       loadDataRef.current();
       return;

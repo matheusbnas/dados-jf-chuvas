@@ -523,14 +523,14 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
         />
       )}
 
-      {/* Painel de filtros: no mobile fica ACIMA do header (z 2100); no desktop = sidebar */}
+      {/* Painel de filtros. No mobile z alto: com pointer-events-none quando fechado para não roubar cliques ao cabeçalho (z 5000 no App). */}
       <div
         className={`
           z-[2100] md:z-[1400] flex flex-col overflow-x-hidden
           transition-transform duration-300 ease-out
           fixed left-0 top-0 bottom-0 w-[85vw] max-w-[320px] bg-white/98 shadow-xl border-r border-gray-200
           md:absolute md:top-28 md:left-3 md:bottom-auto md:max-h-[calc(100vh-7rem)] md:min-w-[200px] md:w-[min(320px,calc(100vw-24px))] md:rounded-lg md:shadow-md md:border md:border-gray-200 md:bg-white/95 md:backdrop-blur
-          ${isMobileView ? (showFiltersPanel ? 'translate-x-0' : '-translate-x-full') : 'md:translate-x-0'}
+          ${isMobileView ? (showFiltersPanel ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none') : 'md:translate-x-0'}
         `}
       >
         {showFiltersPanel ? (
@@ -716,7 +716,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
         </button>
       )}
 
-      {/* Tabela de dados: no mobile fica ACIMA do header (z 2100); no desktop = sidebar */}
+      {/* Tabela de dados. pointer-events-none quando recolhido para cliques no cabeçalho passarem. */}
       <div
         className={`
           flex flex-col min-w-0 transition-all duration-300 ease-in-out overflow-x-hidden
@@ -725,7 +725,15 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
             ? 'w-[95vw] md:w-[600px] lg:w-[650px] max-w-[700px] md:right-3 md:top-28 md:bottom-3 z-[2200] md:z-[2200] bg-white'
             : 'w-[92vw] max-w-[420px] md:w-[min(500px,calc(100vw-24px))] md:absolute md:top-40 md:right-3 md:bottom-3 z-[2100] md:z-[1400]'
           }
-          ${isMobileView ? (showSidebar ? 'translate-x-0' : 'translate-x-full') : showSidebar ? 'translate-x-0' : 'translate-x-[calc(100%+1rem)]'}
+          ${
+            isMobileView
+              ? showSidebar
+                ? 'translate-x-0 pointer-events-auto'
+                : 'translate-x-full pointer-events-none'
+              : showSidebar
+                ? 'translate-x-0 pointer-events-auto'
+                : 'translate-x-[calc(100%+1rem)] pointer-events-none'
+          }
         `}
       >
         <div className="h-full min-h-0 overflow-hidden rounded-l-xl border border-gray-200 bg-white shadow-xl flex flex-col md:rounded-xl">

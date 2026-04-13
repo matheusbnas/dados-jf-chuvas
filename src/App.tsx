@@ -87,7 +87,7 @@ function App() {
     historicalTimestamp,
     refreshInterval: 300000,
   });
-  const isHistoricalMode = dataMode === 'historical' && !useMockDemo;
+  const isHistoricalMode = dataMode === 'historical';
 
   // We simply use the stations provided by useRainData. 
   // The API now handles progressive accumulation correctly.
@@ -210,7 +210,9 @@ function App() {
     ? 'border-amber-400/70 bg-amber-900/78 text-amber-100'
     : 'border-amber-200 bg-amber-50/95 text-amber-800';
   const sourceLabel = useMockDemo
-    ? 'Demonstração'
+    ? isHistoricalMode
+      ? 'Demonstração (histórico sintético)'
+      : 'Demonstração'
     : isHistoricalMode
       ? 'Histórico (CSV CEMADEN)'
       : 'INMET — estação automática A83692 (Juiz de Fora)';
@@ -461,7 +463,7 @@ function App() {
     <div className="min-h-screen w-screen bg-gray-900 overflow-x-hidden">
       <div className="relative h-screen w-full overflow-hidden">
         <LeafletMap
-          headerOverlayTall={(!useMockDemo && !!error) || (isHistoricalMode && !useMockDemo)}
+          headerOverlayTall={(!useMockDemo && !!error) || isHistoricalMode}
           stations={stations}
           mapType={mapType}
           onMapTypeChange={setMapType}
@@ -546,7 +548,7 @@ function App() {
         />
 
 
-        <div className="absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-3 z-[2000] pointer-events-none">
+        <div className="absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-3 z-[5000] pointer-events-none">
           <div className={`pointer-events-auto mx-auto max-w-6xl flex flex-col rounded-xl sm:rounded-2xl border backdrop-blur shadow-lg overflow-visible ${headerPanelClass}`}>
             <div className="flex flex-col gap-2 sm:gap-3 xl:flex-row xl:items-start xl:justify-between xl:gap-4 px-2.5 py-2 sm:px-4 sm:py-3 min-w-0 w-full">
               <div className="min-w-0 flex-1">
@@ -600,10 +602,16 @@ function App() {
                   type="button"
                   onClick={() => setUseMockDemo((v) => !v)}
                   className={`inline-flex items-center gap-1.5 sm:gap-2 rounded-lg px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium transition-colors shrink-0 ${headerButtonMockClass}`}
-                  title={useMockDemo ? 'Voltar aos dados em tempo real' : 'Usar dados de exemplo'}
+                  title={
+                    useMockDemo
+                      ? isHistoricalMode
+                        ? 'Encerrar a demonstração e voltar aos dados reais do site'
+                        : 'Voltar aos dados sem modo demonstração'
+                      : 'Usar dados de exemplo (várias estações fictícias)'
+                  }
                 >
                   <Beaker className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                  {useMockDemo ? 'Tempo real' : 'Exemplo'}
+                  {useMockDemo ? (isHistoricalMode ? 'Sem exemplo' : 'Tempo real') : 'Exemplo'}
                 </button>
                 <button
                   type="button"
@@ -614,8 +622,10 @@ function App() {
                   className={`inline-flex items-center gap-1.5 sm:gap-2 rounded-lg px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium transition-colors shrink-0 ${headerButtonHistoricalClass}`}
                   title={
                     isHistoricalMode
-                      ? 'Voltar para tempo real/fallback automático'
-                      : 'Ativar filtro temporal histórico (CEMADEN: CSV no site ou importado no navegador)'
+                      ? 'Voltar para tempo real / vista atual'
+                      : useMockDemo
+                        ? 'Abrir modo histórico com dados de demonstração (use Aplicar no painel)'
+                        : 'Ativar filtro temporal histórico (CEMADEN: CSV no site ou importado no navegador)'
                   }
                 >
                   {isHistoricalMode ? 'Tempo real' : 'Histórico'}
@@ -640,6 +650,18 @@ function App() {
                 </button>
               </div>
             </div>
+
+            {isHistoricalMode && useMockDemo && (
+              <div
+                className={`px-2.5 pb-2.5 pt-2 sm:px-4 sm:pb-3 sm:pt-2.5 ${historicalDataStripClass(isHighContrastMap)} rounded-b-xl sm:rounded-b-2xl`}
+              >
+                <p className="text-[11px] sm:text-sm leading-relaxed">
+                  <span className="font-semibold opacity-95">Demonstração:</span> chuva e horários são{' '}
+                  <strong>sintéticos</strong> (várias estações fictícias). Para dados reais, desative «Exemplo» e use CSV
+                  CEMADEN ou importação no painel do mapa.
+                </p>
+              </div>
+            )}
 
             {isHistoricalMode && !useMockDemo && (
               <div
